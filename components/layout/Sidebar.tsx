@@ -16,29 +16,34 @@ export default function Sidebar() {
   const pathname = usePathname()
 
   return (
-    <aside className="w-64 border-r border-border p-6 hidden md:block">
-      
-      {/* 🔥 클릭하면 홈으로 */}
-      <Link href="/" className="block mb-8">
+    <aside className="w-64 border-r border-neutral-800 p-6 hidden md:block bg-black">
+
+      {/* Logo */}
+      <Link href="/" className="block mb-10">
         <h1 className="text-xl font-serif font-bold tracking-tight hover:opacity-80 transition">
           Crypto Philosophy Archive
         </h1>
       </Link>
 
+      {/* Navigation */}
       <nav className="space-y-4">
-        {menuItems.map((item) => (
-          <Link
-            key={item.href}
-            href={item.href}
-            className={`block transition-colors ${
-              pathname === item.href
-                ? "font-semibold text-primary"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            {item.name}
-          </Link>
-        ))}
+        {menuItems.map((item) => {
+          const isActive = pathname === item.href
+
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={`block transition-colors ${
+                isActive
+                  ? "text-white font-semibold"
+                  : "text-neutral-400 hover:text-white"
+              }`}
+            >
+              {item.name}
+            </Link>
+          )
+        })}
       </nav>
     </aside>
   )

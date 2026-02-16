@@ -1,7 +1,8 @@
 import type { Metadata } from "next"
 import { Libre_Baskerville, Inter } from "next/font/google"
-
 import "./globals.css"
+
+import { AuthProvider } from "@/context/AuthContext"
 import Sidebar from "@/components/layout/Sidebar"
 import TopBar from "@/components/layout/TopBar"
 
@@ -19,32 +20,33 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: "HYU Crypto Philosophy Archive",
   description:
-    "An interdisciplinary research archive exploring the philosophical foundations of cryptographic systems, dialectic methods, and decentralized knowledge.",
+    "An interdisciplinary research archive exploring the philosophical foundations of cryptographic systems.",
 }
 
 export default function RootLayout({
   children,
-}: Readonly<{
+}: {
   children: React.ReactNode
-}>) {
+}) {
   return (
     <html lang="en">
       <body
-        className={`${libreBaskerville.variable} ${inter.variable} font-sans antialiased bg-background text-foreground`}
+        className={`${libreBaskerville.variable} ${inter.variable} font-sans antialiased bg-black text-white`}
       >
-        <div className="flex h-screen">
-          {/* Sidebar */}
-          <Sidebar />
+        <AuthProvider>
+          <div className="flex min-h-screen">
 
-          {/* Main Area */}
-          <div className="flex flex-col flex-1">
-            <TopBar />
+            <Sidebar />
 
-            <main className="flex-1 overflow-y-auto p-8">
-              {children}
-            </main>
+            <div className="flex-1 flex flex-col">
+              <TopBar />
+              <main className="flex-1 p-8">
+                {children}
+              </main>
+            </div>
+
           </div>
-        </div>
+        </AuthProvider>
       </body>
     </html>
   )
