@@ -10,7 +10,7 @@ export function SiteFooter() {
             HYU Crypto Philosophy Archive
           </p>
           <p className="mt-1 text-xs text-muted-foreground">
-            Hanyang University &middot; Department of Philosophy &middot; Seoul,
+            Hanyang University &middot; Department of the Philosophy of Bitcoin as Money &middot; Seoul,
             South Korea
           </p>
         </div>
