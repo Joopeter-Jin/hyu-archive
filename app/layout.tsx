@@ -5,6 +5,7 @@ import "./globals.css"
 import { AuthProvider } from "@/context/AuthContext"
 import Sidebar from "@/components/layout/Sidebar"
 import TopBar from "@/components/layout/TopBar"
+import MobileSidebar from "@/components/MobileSidebar"
 
 const libreBaskerville = Libre_Baskerville({
   subsets: ["latin"],
@@ -39,7 +40,13 @@ export default function RootLayout({
             <Sidebar />
 
             <div className="flex-1 flex flex-col">
+
               <TopBar />
+
+              <div className="flex items-center justify-between h-16 border-b border-neutral-800 px-4 md:hidden">
+                <MobileSidebar />
+              </div>
+              
               <main className="flex-1 p-8">
                 {children}
               </main>
