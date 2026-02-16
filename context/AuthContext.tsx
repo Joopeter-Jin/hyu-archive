@@ -1,23 +1,20 @@
 "use client"
 
-import { createContext, useContext } from "react"
-
-const AuthContext = createContext({
-  user: { name: "DevUser" } // 👈 임시 로그인 상태
-})
-
-export const useAuth = () => useContext(AuthContext)
+import { SessionProvider, useSession } from "next-auth/react"
 
 export function AuthProvider({
   children,
 }: {
   children: React.ReactNode
 }) {
-  const user = { name: "DevUser" } // 👈 null 대신 이걸로
-
   return (
-    <AuthContext.Provider value={{ user }}>
+    <SessionProvider>
       {children}
-    </AuthContext.Provider>
+    </SessionProvider>
   )
+}
+
+export function useAuth() {
+  const { data: session } = useSession()
+  return { user: session?.user }
 }
