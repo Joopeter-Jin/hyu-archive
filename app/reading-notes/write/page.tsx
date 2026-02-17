@@ -1,39 +1,62 @@
 "use client"
 
-import { useEditor, EditorContent } from "@tiptap/react"
-import StarterKit from "@tiptap/starter-kit"
 import { useState } from "react"
 import { useAuth } from "@/context/AuthContext"
+import { useRouter } from "next/navigation"
+import NotionEditor from "@/components/NotionEditor"
 
 export default function WritePage() {
-  const [title, setTitle] = useState("")
-
   const { user } = useAuth()
-    if (!user) {
-    return <div>Access Denied</div>
+  const router = useRouter()
+
+  const [title, setTitle] = useState("")
+  const [content, setContent] = useState("")
+  const [loading, setLoading] = useState(false)
+
+  if (!user) {
+    return (
+      <div className="text-center mt-20 text-neutral-400">
+        Please login to write a post.
+      </div>
+    )
   }
 
-  const editor = useEditor({
-    extensions: [StarterKit],
-    content: "<p>Start writing...</p>",
-  })
+  const handlePublish = async () => {
+    setLoading(true)
+
+    const res = await fetch("/api/posts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title, content }),
+    })
+
+    if (res.ok) {
+      const data = await res.json()
+      router.push(`/post/${data.id}`)
+    }
+
+    setLoading(false)
+  }
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
+    <div className="max-w-4xl mx-auto py-16 px-6 space-y-8">
       <input
-        className="w-full text-3xl font-serif bg-transparent outline-none"
-        placeholder="Title..."
+        className="w-full text-4xl font-serif bg-transparent outline-none"
+        placeholder="Untitled"
         value={title}
         onChange={(e) => setTitle(e.target.value)}
       />
 
-      <div className="border border-border rounded-lg p-4 min-h-[400px]">
-        <EditorContent editor={editor} />
-      </div>
+      <NotionEditor content={content} onChange={setContent} />
 
-      <button className="px-4 py-2 border rounded-lg hover:bg-accent">
-        Publish
-      </button>
+      <div className="flex justify-end">
+        <button
+          onClick={handlePublish}
+          className="px-6 py-2 bg-white text-black rounded-lg"
+        >
+          {loading ? "Publishing..." : "Publish"}
+        </button>
+      </div>
     </div>
   )
 }
