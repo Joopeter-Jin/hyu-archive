@@ -1,14 +1,11 @@
-import NextAuth, { type NextAuthOptions } from "next-auth"
+export const runtime = "nodejs"  // 🔥 중요
+
+import NextAuth from "next-auth"
 import GoogleProvider from "next-auth/providers/google"
 import { PrismaAdapter } from "@next-auth/prisma-adapter"
-import { PrismaClient } from "@prisma/client"
+import { prisma } from "@/lib/prisma"
 
-// ✅ Prisma 싱글톤 (dev에서 hot-reload로 client 무한 생성 방지)
-const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient }
-const prisma = globalForPrisma.prisma ?? new PrismaClient()
-if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma
-
-export const authOptions: NextAuthOptions = {
+export const authOptions = {
   adapter: PrismaAdapter(prisma),
 
   providers: [
@@ -19,18 +16,9 @@ export const authOptions: NextAuthOptions = {
   ],
 
   secret: process.env.NEXTAUTH_SECRET,
-
-  // ✅ 이게 있어야 session.user.id가 생김
-  callbacks: {
-    async session({ session, user }) {
-      if (session.user) {
-        // PrismaAdapter 사용 시 user.id가 존재
-        ;(session.user as any).id = user.id
-      }
-      return session
-    },
-  },
+  debug: true, // 🔥 Vercel 로그에 원인 표시
 }
 
 const handler = NextAuth(authOptions)
+
 export { handler as GET, handler as POST }
