@@ -15,6 +15,10 @@ export function AuthProvider({
 }
 
 export function useAuth() {
-  const { data: session } = useSession()
-  return { user: session?.user }
+  const { data: session, status } = useSession()
+
+  return {
+    user: session?.user ?? null,
+    loading: status === "loading",
+  }
 }
