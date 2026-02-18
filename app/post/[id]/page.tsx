@@ -1,15 +1,6 @@
-// app/post/[id]/page.tsx
 import { notFound } from "next/navigation"
-import { getSupabaseAnon } from "@/lib/supabase"
-
-type PostRow = {
-  id: string
-  title: string
-  content: string
-  category: string
-  created_at: string
-  author_id: string | null
-}
+import { prisma } from "@/lib/prisma"
+import ViewCounter from "@/components/ViewCounter"
 
 export default async function PostPage({
   params,
@@ -18,26 +9,33 @@ export default async function PostPage({
 }) {
   const { id } = await params
 
-  const supabase = getSupabaseAnon()
+  const post = await prisma.post.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      title: true,
+      content: true,
+      category: true,
+      createdAt: true,
+      authorId: true,
+      views: true,
+    },
+  })
 
-  const { data, error } = await supabase
-    .from("posts")
-    .select("id,title,content,category,created_at,author_id")
-    .eq("id", id)
-    .single()
-
-  if (error || !data) return notFound()
-
-  const post = data as PostRow
+  if (!post) return notFound()
 
   return (
-    <div className="max-w-4xl py-16 px-6 space-y-8">
+    <div className="max-w-4xl mx-auto py-16 px-6 space-y-8">
       <div className="space-y-2">
         <h1 className="text-4xl font-serif font-bold">{post.title}</h1>
         <div className="text-sm text-neutral-500">
-          {new Date(post.created_at).toLocaleString()} · {post.category}
+          {new Date(post.createdAt).toLocaleString()} · {post.category} · Views:{" "}
+          <span className="text-neutral-300">{post.views}</span>
         </div>
       </div>
+
+      {/* ✅ 클라이언트에서 1회 조회수 증가 */}
+      <ViewCounter postId={post.id} />
 
       <div
         className="prose prose-invert max-w-none"
