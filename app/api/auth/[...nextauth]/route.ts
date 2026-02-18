@@ -18,9 +18,21 @@ export const authOptions: NextAuthOptions = {
 
   secret: process.env.NEXTAUTH_SECRET,
 
+  session: {
+    // PrismaAdapter면 보통 database 전략이지만,
+    // Vercel/로컬 혼합에서 안정적으로 id를 가져오려면 callbacks로 보강
+    strategy: "jwt",
+  },
+
   callbacks: {
+    async jwt({ token, user }) {
+      // ✅ 최초 로그인 시 user.id를 token.sub에 확정
+      if (user?.id) token.sub = user.id
+      return token
+    },
+
     async session({ session, token }) {
-      // ✅ token.sub = NextAuth User.id
+      // ✅ token.sub = NextAuth(User.id)
       if (session.user && token?.sub) {
         ;(session.user as any).id = token.sub
       }
