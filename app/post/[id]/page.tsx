@@ -1,30 +1,41 @@
+// app/post/[id]/page.tsx
 import { notFound } from "next/navigation"
-import { prisma } from "@/lib/prisma"
+import { getSupabaseAnon } from "@/lib/supabase"
 
-export default async function PostPage(props: any) {
-  const id = props?.params?.id as string | undefined
-  if (!id) return notFound()
+type PostRow = {
+  id: string
+  title: string
+  content: string
+  category: string
+  created_at: string
+  author_id: string | null
+}
 
-  const post = await prisma.post.findUnique({
-    where: { id },
-    select: {
-      id: true,
-      title: true,
-      content: true,
-      category: true,
-      createdAt: true,
-      authorId: true,
-    },
-  })
+export default async function PostPage({
+  params,
+}: {
+  params: Promise<{ id: string }>
+}) {
+  const { id } = await params
 
-  if (!post) return notFound()
+  const supabase = getSupabaseAnon()
+
+  const { data, error } = await supabase
+    .from("posts")
+    .select("id,title,content,category,created_at,author_id")
+    .eq("id", id)
+    .single()
+
+  if (error || !data) return notFound()
+
+  const post = data as PostRow
 
   return (
-    <div className="py-12 px-6 space-y-8">
+    <div className="max-w-4xl py-16 px-6 space-y-8">
       <div className="space-y-2">
         <h1 className="text-4xl font-serif font-bold">{post.title}</h1>
         <div className="text-sm text-neutral-500">
-          {new Date(post.createdAt).toLocaleString()} · {post.category}
+          {new Date(post.created_at).toLocaleString()} · {post.category}
         </div>
       </div>
 

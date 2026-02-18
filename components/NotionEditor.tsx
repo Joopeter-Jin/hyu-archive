@@ -5,194 +5,89 @@ import StarterKit from "@tiptap/starter-kit"
 import Image from "@tiptap/extension-image"
 import Placeholder from "@tiptap/extension-placeholder"
 import Underline from "@tiptap/extension-underline"
-import TextAlign from "@tiptap/extension-text-align"
 import Dropcursor from "@tiptap/extension-dropcursor"
-import Suggestion from "@tiptap/suggestion"
-import { Extension } from "@tiptap/core"
+import { useRef } from "react"
 
 interface Props {
   content?: string
   onChange?: (content: string) => void
 }
 
-async function uploadImage(file: File): Promise<string> {
-  const form = new FormData()
-  form.append("file", file)
+async function uploadToServer(file: File): Promise<string> {
+  const fd = new FormData()
+  fd.append("file", file)
 
-  const res = await fetch("/api/upload", { method: "POST", body: form })
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}))
-    throw new Error(err?.error ?? "upload failed")
-  }
-  const data = await res.json()
-  return data.url as string
+  const res = await fetch("/api/upload", { method: "POST", body: fd })
+  if (!res.ok) throw new Error("Upload failed")
+
+  const data = (await res.json()) as { url: string }
+  return data.url
 }
 
-/**
- * 간단한 Notion 느낌 Slash menu
- */
-const SlashCommand = Extension.create({
-  name: "slash-command",
-  addProseMirrorPlugins() {
-    return [
-      Suggestion({
-        editor: this.editor,
-        char: "/",
-        startOfLine: true,
-
-        items: () => [
-          {
-            title: "Heading 1",
-            command: ({ editor, range }: any) =>
-              editor.chain().focus().deleteRange(range).setHeading({ level: 1 }).run(),
-          },
-          {
-            title: "Heading 2",
-            command: ({ editor, range }: any) =>
-              editor.chain().focus().deleteRange(range).setHeading({ level: 2 }).run(),
-          },
-          {
-            title: "Bullet List",
-            command: ({ editor, range }: any) =>
-              editor.chain().focus().deleteRange(range).toggleBulletList().run(),
-          },
-          {
-            title: "Numbered List",
-            command: ({ editor, range }: any) =>
-              editor.chain().focus().deleteRange(range).toggleOrderedList().run(),
-          },
-          {
-            title: "Quote",
-            command: ({ editor, range }: any) =>
-              editor.chain().focus().deleteRange(range).toggleBlockquote().run(),
-          },
-          {
-            title: "Code Block",
-            command: ({ editor, range }: any) =>
-              editor.chain().focus().deleteRange(range).toggleCodeBlock().run(),
-          },
-        ],
-
-        render: () => {
-          let el: HTMLDivElement | null = null
-
-          const make = (props: any) => {
-            const root = document.createElement("div")
-            root.className =
-              "z-[9999] w-64 bg-neutral-950 border border-neutral-800 rounded-xl shadow-xl overflow-hidden"
-
-            props.items.forEach((item: any) => {
-              const row = document.createElement("button")
-              row.type = "button"
-              row.className =
-                "w-full text-left px-3 py-2 text-sm text-neutral-200 hover:bg-neutral-900"
-              row.textContent = item.title
-              row.onclick = () => item.command(props)
-              root.appendChild(row)
-            })
-
-            return root
-          }
-
-          return {
-            onStart: (props) => {
-              el = make(props)
-              document.body.appendChild(el)
-
-              const rect = props.clientRect?.()
-              if (!rect || !el) return
-              el.style.position = "absolute"
-              el.style.left = `${rect.left}px`
-              el.style.top = `${rect.bottom + 8}px`
-            },
-            onUpdate: (props) => {
-              if (!el) return
-              el.remove()
-              el = make(props)
-              document.body.appendChild(el)
-
-              const rect = props.clientRect?.()
-              if (!rect || !el) return
-              el.style.position = "absolute"
-              el.style.left = `${rect.left}px`
-              el.style.top = `${rect.bottom + 8}px`
-            },
-            onExit: () => {
-              el?.remove()
-              el = null
-            },
-          }
-        },
-      }),
-    ]
-  },
-})
-
 export default function NotionEditor({ content, onChange }: Props) {
-  const editor = useEditor({
-    immediatelyRender: false, // ✅ SSR hydration 경고 방지
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
 
+  const editor = useEditor({
+    immediatelyRender: false,
     extensions: [
       StarterKit,
       Underline,
       Dropcursor,
-      TextAlign.configure({ types: ["heading", "paragraph"] }),
       Image.configure({ inline: false }),
-      Placeholder.configure({ placeholder: "Type '/' for commands..." }),
-      SlashCommand,
+      Placeholder.configure({
+        placeholder: "Type '/' for commands, or drop an image…",
+      }),
     ],
-
-    content: content ?? "<p></p>",
-
+    content,
     editorProps: {
       attributes: {
         class:
-          "prose prose-invert max-w-none focus:outline-none min-h-[520px] " +
-          "prose-headings:font-serif prose-p:leading-relaxed",
+          "prose prose-invert max-w-none focus:outline-none min-h-[500px]",
       },
 
-      // 드래그 앤 드롭 이미지
+      // ✅ drag&drop 파일 처리
       handleDrop: (view, event) => {
         const files = event.dataTransfer?.files
-        if (!files || files.length === 0) return false
+        if (!files?.length) return false
 
         const file = files[0]
         if (!file.type.startsWith("image/")) return false
 
-        uploadImage(file)
-          .then((url) => {
-            const node = view.state.schema.nodes.image.create({ src: url })
-            const tr = view.state.tr.replaceSelectionWith(node)
-            view.dispatch(tr)
-          })
-          .catch(() => {})
+        ;(async () => {
+          try {
+            const url = await uploadToServer(file)
+            editor?.chain().focus().setImage({ src: url }).run()
+          } catch (e) {
+            alert("Image upload failed")
+          }
+        })()
 
         return true
       },
 
-      // 붙여넣기 이미지(클립보드)
-      handlePaste: (view, event) => {
+      // ✅ paste 이미지 처리
+      handlePaste: (_view, event) => {
         const items = event.clipboardData?.items
         if (!items) return false
 
-        const img = Array.from(items).find((i) => i.type.startsWith("image/"))
-        if (!img) return false
+        const fileItem = Array.from(items).find((i) => i.type.startsWith("image/"))
+        if (!fileItem) return false
 
-        const file = img.getAsFile()
+        const file = fileItem.getAsFile()
         if (!file) return false
 
-        uploadImage(file)
-          .then((url) => {
-            const node = view.state.schema.nodes.image.create({ src: url })
-            const tr = view.state.tr.replaceSelectionWith(node)
-            view.dispatch(tr)
-          })
-          .catch(() => {})
+        ;(async () => {
+          try {
+            const url = await uploadToServer(file)
+            editor?.chain().focus().setImage({ src: url }).run()
+          } catch {
+            alert("Image upload failed")
+          }
+        })()
 
         return true
       },
     },
-
     onUpdate({ editor }) {
       onChange?.(editor.getHTML())
     },
@@ -200,9 +95,44 @@ export default function NotionEditor({ content, onChange }: Props) {
 
   if (!editor) return null
 
+  const onPickImage = async (f: File | null) => {
+    if (!f) return
+    try {
+      const url = await uploadToServer(f)
+      editor.chain().focus().setImage({ src: url }).run()
+    } catch {
+      alert("Image upload failed")
+    } finally {
+      if (fileInputRef.current) fileInputRef.current.value = ""
+    }
+  }
+
   return (
-    <div className="rounded-2xl border border-neutral-800 bg-neutral-950 p-6">
-      <EditorContent editor={editor} />
+    <div className="space-y-3">
+      {/* Notion 느낌: 상단에 간단한 삽입 버튼 */}
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          className="px-3 py-1 text-sm border border-neutral-800 rounded hover:bg-neutral-900"
+          onClick={() => fileInputRef.current?.click()}
+        >
+          Insert image
+        </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => onPickImage(e.target.files?.[0] ?? null)}
+        />
+        <div className="text-xs text-neutral-500">
+          Drag & drop / Paste supported
+        </div>
+      </div>
+
+      <div className="border border-neutral-800 rounded-xl p-5 bg-neutral-950">
+        <EditorContent editor={editor} />
+      </div>
     </div>
   )
 }
