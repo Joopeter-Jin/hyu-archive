@@ -1,24 +1,20 @@
-export const runtime = "nodejs"  // 🔥 중요
-
-import NextAuth from "next-auth"
+import NextAuth, { type NextAuthOptions } from "next-auth"
 import GoogleProvider from "next-auth/providers/google"
 import { PrismaAdapter } from "@next-auth/prisma-adapter"
-import { prisma } from "@/lib/prisma"
+import { PrismaClient } from "@prisma/client"
+
+const prisma = new PrismaClient()
 
 export const authOptions = {
   adapter: PrismaAdapter(prisma),
-
   providers: [
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID!,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
     }),
   ],
-
   secret: process.env.NEXTAUTH_SECRET,
-  debug: true, // 🔥 Vercel 로그에 원인 표시
-}
+} satisfies NextAuthOptions
 
 const handler = NextAuth(authOptions)
-
 export { handler as GET, handler as POST }

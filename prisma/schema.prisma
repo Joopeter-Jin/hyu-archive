@@ -3,48 +3,41 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
+// NextAuth models
 model User {
-  id        String   @id @default(cuid())
-  name      String?
-  email     String?  @unique
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
   emailVerified DateTime?
-  image     String?
+  image         String?
 
-  accounts  Account[]
-  sessions  Session[]
-  posts     Post[]
+  accounts      Account[]
+  sessions      Session[]
+  posts         Post[]
 
-  createdAt DateTime @default(now())
-}
-
-model Post {
-  id        String   @id @default(cuid())
-  title     String
-  content   String
-  author    User     @relation(fields: [authorId], references: [id])
-  authorId  String
-  createdAt DateTime @default(now())
+  createdAt     DateTime  @default(now())
 }
 
 model Account {
-  id                 String  @id @default(cuid())
-  userId             String
-  type               String
-  provider           String
-  providerAccountId  String
-  refresh_token      String?
-  access_token       String?
-  expires_at         Int?
-  token_type         String?
-  scope              String?
-  id_token           String?
-  session_state      String?
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerAccountId])
 }
@@ -55,7 +48,7 @@ model Session {
   userId       String
   expires      DateTime
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model VerificationToken {
@@ -64,4 +57,20 @@ model VerificationToken {
   expires    DateTime
 
   @@unique([identifier, token])
+}
+
+// posts table on Supabase(Postgres)
+// - id: uuid
+// - author_id: text (NextAuth User.id is string)
+model Post {
+  id        String   @id @default(uuid()) @db.Uuid
+  title     String
+  content   String
+  category  String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  authorId  String   @map("author_id")
+  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@map("posts")
 }

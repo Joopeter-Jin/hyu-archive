@@ -1,29 +1,28 @@
 import Link from "next/link"
-import CategoryLayout from "@/components/CategoryLayout"
-import { getSupabaseAnon } from "@/lib/supabase"
-
-type PostRow = { id: string; title: string; created_at: string }
+import WriteButton from "@/components/WriteButton"
+import { prisma } from "@/lib/prisma"
 
 export default async function DebatesPage() {
-  const supabase = getSupabaseAnon()
-  const { data, error } = await supabase
-    .from("posts")
-    .select("id,title,created_at")
-    .eq("category", "debates")
-    .order("created_at", { ascending: false })
-
-  const posts = (data ?? []) as PostRow[]
+  const posts = await prisma.post.findMany({
+    where: { category: "debates" },
+    select: { id: true, title: true, createdAt: true },
+    orderBy: { createdAt: "desc" },
+  })
 
   return (
-    <CategoryLayout
-      title="Debates & Questions"
-      description="Dialectical debates and research questions on money, sovereignty, and trust architectures."
-      writeHref="/debates/write"
-    >
+    <div className="py-12 px-6 space-y-10">
+      <div className="flex items-start justify-between gap-6">
+        <div>
+          <h1 className="text-3xl font-serif font-bold">Debates & Questions</h1>
+          <p className="mt-2 text-neutral-400">
+            Dialectical inquiries, objections, and open problems worth pursuing.
+          </p>
+        </div>
+        <WriteButton href="/debates/write" />
+      </div>
+
       <div className="space-y-3">
-        {error ? (
-          <div className="text-neutral-400">Error loading posts</div>
-        ) : posts.length ? (
+        {posts.length ? (
           posts.map((post) => (
             <Link key={post.id} href={`/post/${post.id}`}>
               <div className="p-4 border border-neutral-800 rounded-lg hover:bg-neutral-900 transition cursor-pointer">
@@ -35,6 +34,6 @@ export default async function DebatesPage() {
           <div className="text-neutral-500">No posts yet.</div>
         )}
       </div>
-    </CategoryLayout>
+    </div>
   )
 }

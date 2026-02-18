@@ -1,29 +1,28 @@
 import Link from "next/link"
-import CategoryLayout from "@/components/CategoryLayout"
-import { getSupabaseAnon } from "@/lib/supabase"
-
-type PostRow = { id: string; title: string; created_at: string }
+import WriteButton from "@/components/WriteButton"
+import { prisma } from "@/lib/prisma"
 
 export default async function NewsPage() {
-  const supabase = getSupabaseAnon()
-  const { data, error } = await supabase
-    .from("posts")
-    .select("id,title,created_at")
-    .eq("category", "news")
-    .order("created_at", { ascending: false })
-
-  const posts = (data ?? []) as PostRow[]
+  const posts = await prisma.post.findMany({
+    where: { category: "news" },
+    select: { id: true, title: true, createdAt: true },
+    orderBy: { createdAt: "desc" },
+  })
 
   return (
-    <CategoryLayout
-      title="News & Interpretation"
-      description="Curated signals and interpretive essays connecting current events to long-term monetary thought."
-      writeHref="/news/write"
-    >
+    <div className="py-12 px-6 space-y-10">
+      <div className="flex items-start justify-between gap-6">
+        <div>
+          <h1 className="text-3xl font-serif font-bold">News & Interpretation</h1>
+          <p className="mt-2 text-neutral-400">
+            Curated events and interpretive essays grounded in monetary and institutional analysis.
+          </p>
+        </div>
+        <WriteButton href="/news/write" />
+      </div>
+
       <div className="space-y-3">
-        {error ? (
-          <div className="text-neutral-400">Error loading posts</div>
-        ) : posts.length ? (
+        {posts.length ? (
           posts.map((post) => (
             <Link key={post.id} href={`/post/${post.id}`}>
               <div className="p-4 border border-neutral-800 rounded-lg hover:bg-neutral-900 transition cursor-pointer">
@@ -35,6 +34,6 @@ export default async function NewsPage() {
           <div className="text-neutral-500">No posts yet.</div>
         )}
       </div>
-    </CategoryLayout>
+    </div>
   )
 }
