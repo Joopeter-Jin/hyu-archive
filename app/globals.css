@@ -36,4 +36,38 @@
   body {
     @apply bg-background text-foreground;
   }
+
+  .tt-drag-handle {
+  position: absolute;
+  left: -28px;
+  top: 0px;
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  cursor: grab;
+  color: rgba(255,255,255,0.5);
+  background: rgba(0,0,0,0.0);
+}
+
+.tt-drag-handle:hover {
+  background: rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.9);
+}
+
+.ProseMirror {
+  position: relative;
+}
+
+/* 드래그 중 커서 */
+.tt-drag-handle:active {
+  cursor: grabbing;
+}
+
+.empty-caption::before {
+  content: attr(data-placeholder);
+  color: rgba(255,255,255,0.35);
+}
+
 }

@@ -9,6 +9,7 @@ import Placeholder from "@tiptap/extension-placeholder"
 import Link from "@tiptap/extension-link"
 import Suggestion from "@tiptap/suggestion"
 import Image from "@tiptap/extension-image"
+import DragHandle from "@tiptap/extension-drag-handle"
 
 import React, { useEffect, useMemo, useRef, useState } from "react"
 
@@ -41,19 +42,18 @@ const ResizableImage = Image.extend({
     return {
       ...this.parent?.(),
 
-      // px 리사이즈용
       width: {
         default: null as number | null,
         parseHTML: (el) => {
           const w = el.getAttribute("data-width")
           return w ? Number(w) : null
         },
-        renderHTML: (attrs) => (attrs.width ? { "data-width": String(attrs.width) } : {}),
+        renderHTML: (attrs) =>
+          attrs.width ? { "data-width": String(attrs.width) } : {},
       },
 
-      // 프리셋(%)용
       widthPct: {
-        default: null as number | null, // 25 / 50 / 100
+        default: null as number | null, // 25/50/100
         parseHTML: (el) => {
           const w = el.getAttribute("data-width-pct")
           return w ? Number(w) : null
@@ -67,20 +67,42 @@ const ResizableImage = Image.extend({
         parseHTML: (el) => (el.getAttribute("data-align") as any) ?? "center",
         renderHTML: (attrs) => ({ "data-align": attrs.align }),
       },
+
+      alt: {
+        default: "" as string,
+        parseHTML: (el) => el.getAttribute("alt") ?? "",
+        renderHTML: (attrs) => (attrs.alt ? { alt: attrs.alt } : {}),
+      },
+
+      caption: {
+        default: "" as string,
+        parseHTML: (el) => el.getAttribute("data-caption") ?? "",
+        renderHTML: (attrs) =>
+          attrs.caption ? { "data-caption": attrs.caption } : {},
+      },
+
+      rounded: {
+        default: true as boolean,
+        parseHTML: (el) => el.getAttribute("data-rounded") !== "false",
+        renderHTML: (attrs) => ({ "data-rounded": String(attrs.rounded) }),
+      },
+
+      bordered: {
+        default: true as boolean,
+        parseHTML: (el) => el.getAttribute("data-bordered") !== "false",
+        renderHTML: (attrs) => ({ "data-bordered": String(attrs.bordered) }),
+      },
     }
   },
 
   addNodeView() {
     return ({ node, editor, getPos }) => {
-      const wrapper = document.createElement("div")
-      wrapper.className =
-        "relative my-3 max-w-full rounded-lg overflow-hidden border border-neutral-800 bg-neutral-950"
+      const wrapper = document.createElement("figure")
+      wrapper.className = "relative my-4 max-w-full"
       wrapper.style.display = "block"
 
       const inner = document.createElement("div")
-      inner.className = "relative"
-      inner.style.display = "inline-block"
-      inner.style.maxWidth = "100%"
+      inner.className = "relative inline-block max-w-full"
 
       const img = document.createElement("img")
       img.src = node.attrs.src
@@ -88,37 +110,55 @@ const ResizableImage = Image.extend({
       img.draggable = false
       img.className = "block max-w-full h-auto select-none"
 
-      // ✅ align 적용
+      // style apply helpers
       const applyAlign = (align: "left" | "center" | "right") => {
         if (align === "left") wrapper.style.textAlign = "left"
         if (align === "center") wrapper.style.textAlign = "center"
         if (align === "right") wrapper.style.textAlign = "right"
       }
 
-      // ✅ width 적용 (pct 우선)
       const applyWidth = (attrs: any) => {
-        if (attrs.widthPct) {
-          img.style.width = `${attrs.widthPct}%`
-        } else if (attrs.width) {
-          img.style.width = `${attrs.width}px`
-        } else {
-          img.style.width = "auto"
-        }
+        if (attrs.widthPct) img.style.width = `${attrs.widthPct}%`
+        else if (attrs.width) img.style.width = `${attrs.width}px`
+        else img.style.width = "auto"
       }
 
-      applyAlign(node.attrs.align ?? "center")
-      applyWidth(node.attrs)
+      const applyDecor = (attrs: any) => {
+        img.style.borderRadius = attrs.rounded ? "14px" : "0px"
+        img.style.border = attrs.bordered ? "1px solid rgb(38 38 38)" : "none"
+      }
 
-      // 리사이즈 핸들
+      // caption
+      const cap = document.createElement("figcaption")
+      cap.className =
+        "mt-2 text-sm text-neutral-400 outline-none focus:text-neutral-200"
+      cap.contentEditable = String(editor.isEditable)
+      cap.dataset.placeholder = "Write a caption…"
+      cap.innerText = node.attrs.caption || ""
+
+      // placeholder behavior for caption
+      const syncCaptionPlaceholder = () => {
+        if (!cap.innerText.trim()) cap.classList.add("empty-caption")
+        else cap.classList.remove("empty-caption")
+      }
+      syncCaptionPlaceholder()
+
+      cap.addEventListener("input", () => {
+        const text = cap.innerText
+        setAttrs({ caption: text })
+        syncCaptionPlaceholder()
+      })
+
+      // handle
       const handle = document.createElement("div")
       handle.className =
-        "absolute right-1 bottom-1 w-3 h-3 rounded-sm bg-white/80 cursor-se-resize shadow"
+        "absolute right-2 bottom-2 w-3 h-3 rounded-sm bg-white/80 cursor-se-resize shadow"
       handle.title = "Drag to resize"
 
-      // ✅ 팝오버
+      // popover
       const pop = document.createElement("div")
       pop.className =
-        "hidden absolute left-2 top-2 z-20 rounded-xl border border-neutral-800 bg-neutral-950 shadow-lg p-1"
+        "hidden absolute left-2 top-2 z-20 rounded-xl border border-neutral-800 bg-neutral-950 shadow-lg p-2"
       pop.style.whiteSpace = "nowrap"
 
       const mkBtn = (label: string, onClick: () => void) => {
@@ -134,6 +174,50 @@ const ResizableImage = Image.extend({
           onClick()
         }
         return b
+      }
+
+      const mkToggle = (label: string, getVal: () => boolean, setVal: (v: boolean) => void) => {
+        const b = document.createElement("button")
+        const render = () => {
+          const on = getVal()
+          b.textContent = `${label}: ${on ? "On" : "Off"}`
+          b.className =
+            "px-2 py-1 text-xs rounded-lg transition " +
+            (on
+              ? "bg-neutral-900 text-white border border-neutral-700"
+              : "text-neutral-300 hover:text-white hover:bg-neutral-900 border border-transparent")
+        }
+        b.type = "button"
+        b.onmousedown = (e) => e.preventDefault()
+        b.onclick = (e) => {
+          e.preventDefault()
+          e.stopPropagation()
+          setVal(!getVal())
+          render()
+        }
+        render()
+        return b
+      }
+
+      const mkInput = (label: string, getVal: () => string, setValFn: (v: string) => void) => {
+        const row = document.createElement("div")
+        row.className = "mt-2 flex items-center gap-2"
+        const lab = document.createElement("div")
+        lab.className = "text-xs text-neutral-500 w-8"
+        lab.innerText = label
+
+        const input = document.createElement("input")
+        input.className =
+          "flex-1 text-xs bg-neutral-900 border border-neutral-800 rounded-lg px-2 py-1 text-neutral-200 outline-none"
+        input.value = getVal()
+        input.placeholder = label === "Alt" ? "Describe image…" : ""
+
+        input.onmousedown = (e) => e.stopPropagation()
+        input.oninput = () => setValFn(input.value)
+
+        row.appendChild(lab)
+        row.appendChild(input)
+        return row
       }
 
       const setAttrs = (attrs: Record<string, any>) => {
@@ -152,44 +236,59 @@ const ResizableImage = Image.extend({
       const delNode = () => {
         const pos = typeof getPos === "function" ? getPos() : null
         if (pos == null) return
-        editor.chain().focus().command(({ tr }) => {
-          tr.delete(pos, pos + node.nodeSize)
-          return true
-        }).run()
+        editor
+          .chain()
+          .focus()
+          .command(({ tr }) => {
+            tr.delete(pos, pos + node.nodeSize)
+            return true
+          })
+          .run()
       }
 
-      // align
-      pop.appendChild(mkBtn("Left", () => setAttrs({ align: "left" })))
-      pop.appendChild(mkBtn("Center", () => setAttrs({ align: "center" })))
-      pop.appendChild(mkBtn("Right", () => setAttrs({ align: "right" })))
+      // pop content
+      const row1 = document.createElement("div")
+      row1.className = "flex items-center gap-1"
+      row1.appendChild(mkBtn("Left", () => setAttrs({ align: "left" })))
+      row1.appendChild(mkBtn("Center", () => setAttrs({ align: "center" })))
+      row1.appendChild(mkBtn("Right", () => setAttrs({ align: "right" })))
+      pop.appendChild(row1)
 
-      // width presets (%)
-      pop.appendChild(mkBtn("25%", () => setAttrs({ widthPct: 25, width: null })))
-      pop.appendChild(mkBtn("50%", () => setAttrs({ widthPct: 50, width: null })))
-      pop.appendChild(mkBtn("100%", () => setAttrs({ widthPct: 100, width: null })))
+      const row2 = document.createElement("div")
+      row2.className = "mt-2 flex items-center gap-1"
+      row2.appendChild(mkBtn("25%", () => setAttrs({ widthPct: 25, width: null })))
+      row2.appendChild(mkBtn("50%", () => setAttrs({ widthPct: 50, width: null })))
+      row2.appendChild(mkBtn("100%", () => setAttrs({ widthPct: 100, width: null })))
+      pop.appendChild(row2)
 
-      // delete
-      pop.appendChild(mkBtn("Delete", delNode))
+      const row3 = document.createElement("div")
+      row3.className = "mt-2 flex items-center gap-1"
+      row3.appendChild(
+        mkToggle("Round", () => !!node.attrs.rounded, (v) => setAttrs({ rounded: v }))
+      )
+      row3.appendChild(
+        mkToggle("Border", () => !!node.attrs.bordered, (v) => setAttrs({ bordered: v }))
+      )
+      row3.appendChild(mkBtn("Delete", delNode))
+      pop.appendChild(row3)
 
-      const showPop = () => {
-        pop.classList.remove("hidden")
-      }
-      const hidePop = () => {
-        pop.classList.add("hidden")
-      }
+      pop.appendChild(
+        mkInput("Alt", () => String(node.attrs.alt ?? ""), (v) => setAttrs({ alt: v }))
+      )
 
-      // 클릭 시 토글
+      const showPop = () => pop.classList.remove("hidden")
+      const hidePop = () => pop.classList.add("hidden")
+
       inner.addEventListener("click", (e) => {
         e.stopPropagation()
         if (pop.classList.contains("hidden")) showPop()
         else hidePop()
       })
 
-      // 바깥 클릭 시 닫기
       const onDocClick = () => hidePop()
       document.addEventListener("click", onDocClick)
 
-      // 드래그 리사이즈 (드래그하면 px로 저장 + widthPct 해제)
+      // resize drag
       let startX = 0
       let startWidth = 0
       let dragging = false
@@ -200,7 +299,6 @@ const ResizableImage = Image.extend({
         dragging = true
         startX = e.clientX
         startWidth = img.getBoundingClientRect().width
-
         document.addEventListener("mousemove", onMouseMove)
         document.addEventListener("mouseup", onMouseUp)
       }
@@ -215,20 +313,24 @@ const ResizableImage = Image.extend({
       const onMouseUp = () => {
         if (!dragging) return
         dragging = false
-
         document.removeEventListener("mousemove", onMouseMove)
         document.removeEventListener("mouseup", onMouseUp)
-
         const nextWidth = Math.round(img.getBoundingClientRect().width)
         setAttrs({ width: nextWidth, widthPct: null })
       }
 
       handle.addEventListener("mousedown", onMouseDown)
 
+      // initial apply
+      applyAlign(node.attrs.align ?? "center")
+      applyWidth(node.attrs)
+      applyDecor(node.attrs)
+
       inner.appendChild(pop)
       inner.appendChild(img)
       inner.appendChild(handle)
       wrapper.appendChild(inner)
+      wrapper.appendChild(cap)
 
       return {
         dom: wrapper,
@@ -236,9 +338,16 @@ const ResizableImage = Image.extend({
         update: (updatedNode) => {
           if (updatedNode.type.name !== node.type.name) return false
           node = updatedNode
+
           img.src = updatedNode.attrs.src
+          img.alt = updatedNode.attrs.alt || ""
+          cap.contentEditable = String(editor.isEditable)
+          cap.innerText = updatedNode.attrs.caption || ""
+
           applyAlign(updatedNode.attrs.align ?? "center")
           applyWidth(updatedNode.attrs)
+          applyDecor(updatedNode.attrs)
+          syncCaptionPlaceholder()
           return true
         },
 
@@ -631,6 +740,16 @@ export default function NotionEditor({ content, onChange }: Props) {
 
     extensions: [
       StarterKit,
+      DragHandle.configure({
+      // Notion처럼 왼쪽에만 핸들
+      render: () => {
+      const el = document.createElement("div")
+      el.className =
+      "tt-drag-handle opacity-0 group-hover:opacity-100 transition"
+      el.innerHTML = "⋮⋮"
+      return el
+      },
+      }),
       Underline,
       Dropcursor,
       Link.configure({
@@ -739,7 +858,7 @@ export default function NotionEditor({ content, onChange }: Props) {
         <div className="text-xs text-neutral-500">Drag & drop / Paste supported</div>
       </div>
 
-      <div ref={containerRef} className="relative border border-neutral-800 rounded-xl bg-neutral-950">
+      <div ref={containerRef} className="relative border border-neutral-800 rounded-xl bg-neutral-950 group">
         <FloatingToolbar editor={editor} containerRef={containerRef} />
         <BlockPlusButton editor={editor} containerRef={containerRef} onOpen={openSlashMenuAtCursor} />
         <EditorContent editor={editor} />
