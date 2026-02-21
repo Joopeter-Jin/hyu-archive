@@ -1,95 +1,104 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useRouter } from "next/navigation"
 import NotionEditor from "@/components/NotionEditor"
-import { useAuth } from "@/context/AuthContext"
 
-type PostRow = {
+type Props = {
+  category: string
+  editId: string | null
+}
+
+type PostDTO = {
   id: string
   title: string
   content: string
   category: string
 }
 
-export default function WriteClient() {
-  const { user } = useAuth()
+export default function WriteClient({ category, editId }: Props) {
   const router = useRouter()
-  const searchParams = useSearchParams()
-
-  const editId = searchParams.get("edit") // ?edit=uuid
-  const category = "class-seminars" // 이 페이지는 about/write니까 고정
 
   const [title, setTitle] = useState("")
   const [content, setContent] = useState("")
   const [loading, setLoading] = useState(false)
-  const [loadingPost, setLoadingPost] = useState(false)
+  const [initLoading, setInitLoading] = useState<boolean>(!!editId)
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
 
   useEffect(() => {
+    let ignore = false
     if (!editId) return
+
     ;(async () => {
-      setLoadingPost(true)
       try {
+        setInitLoading(true)
+        setErrorMsg(null)
+
         const res = await fetch(`/api/posts/${editId}`, { cache: "no-store" })
         if (!res.ok) throw new Error("Failed to load post")
-        const post = (await res.json()) as PostRow
+
+        const post = (await res.json()) as PostDTO
+        if (ignore) return
+
         setTitle(post.title ?? "")
         setContent(post.content ?? "")
-      } catch (e) {
-        alert("Failed to load post for editing.")
+      } catch {
+        if (!ignore) setErrorMsg("Failed to load the post for editing.")
       } finally {
-        setLoadingPost(false)
+        if (!ignore) setInitLoading(false)
       }
     })()
+
+    return () => {
+      ignore = true
+    }
   }, [editId])
 
-  if (!user) {
-    return <div className="text-center mt-20 text-neutral-400">Please login to write a post.</div>
-  }
-
-  const handlePublish = async () => {
+  const handleSave = async () => {
     setLoading(true)
+    setErrorMsg(null)
+
     try {
-      const res = await fetch("/api/posts", {
+      const res = await fetch(editId ? `/api/posts/${editId}` : "/api/posts", {
         method: editId ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: editId, title, content, category }),
+        body: JSON.stringify({ title, content, category }),
       })
 
-      if (!res.ok) throw new Error("Failed to save")
-      const data = (await res.json()) as { id: string }
+      if (!res.ok) {
+        const txt = await res.text().catch(() => "")
+        throw new Error(txt || "Save failed")
+      }
 
-      // ✅ 저장 후: 해당 글로 이동(혹은 목록으로)
-      router.push(`/post/${data.id}`)
+      router.push(`/${category}`)
       router.refresh()
-    } catch {
-      alert("Failed to save post")
+    } catch (e: any) {
+      setErrorMsg(e?.message ?? "Failed to save post.")
     } finally {
       setLoading(false)
     }
   }
 
+  if (initLoading) return <div className="text-neutral-400">Loading editor...</div>
+
   return (
-    <div className="max-w-4xl mx-auto py-16 px-6 space-y-8">
+    <div className="max-w-4xl py-12 px-6 space-y-8">
       <input
         className="w-full text-4xl font-serif bg-transparent outline-none"
         placeholder="Untitled"
         value={title}
         onChange={(e) => setTitle(e.target.value)}
-        disabled={loadingPost}
       />
 
-      {loadingPost ? (
-        <div className="text-neutral-400">Loading post…</div>
-      ) : (
-        <NotionEditor content={content} onChange={setContent} />
-      )}
+      <NotionEditor content={content} onChange={setContent} />
+
+      {errorMsg && <div className="text-sm text-red-400">{errorMsg}</div>}
 
       <div className="flex justify-end">
         <button
-          onClick={handlePublish}
-          disabled={loading || loadingPost}
-          className="px-6 py-2 bg-white text-black rounded-lg disabled:opacity-60"
+          onClick={handleSave}
+          disabled={loading}
+          className="px-6 py-2 bg-white text-black rounded-lg disabled:opacity-50"
         >
           {loading ? "Saving..." : editId ? "Update" : "Publish"}
         </button>
