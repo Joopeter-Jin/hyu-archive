@@ -1,12 +1,12 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
+import { useEffect, useMemo, useState } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import NotionEditor from "@/components/NotionEditor"
 
 type Props = {
   category: string
-  editId: string | null
+  editId?: string | null // ✅ optional
 }
 
 type PostDTO = {
@@ -18,23 +18,34 @@ type PostDTO = {
 
 export default function WriteClient({ category, editId }: Props) {
   const router = useRouter()
+  const searchParams = useSearchParams()
+
+  // ✅ prop 우선, 없으면 URL 쿼리에서 읽기 (?edit=...)
+  const resolvedEditId = useMemo(() => {
+    return editId ?? searchParams.get("edit")
+  }, [editId, searchParams])
 
   const [title, setTitle] = useState("")
   const [content, setContent] = useState("")
   const [loading, setLoading] = useState(false)
-  const [initLoading, setInitLoading] = useState<boolean>(!!editId)
+  const [initLoading, setInitLoading] = useState<boolean>(!!resolvedEditId)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
 
   useEffect(() => {
     let ignore = false
-    if (!editId) return
+    if (!resolvedEditId) {
+      setInitLoading(false)
+      return
+    }
 
     ;(async () => {
       try {
         setInitLoading(true)
         setErrorMsg(null)
 
-        const res = await fetch(`/api/posts/${editId}`, { cache: "no-store" })
+        const res = await fetch(`/api/posts/${resolvedEditId}`, {
+          cache: "no-store",
+        })
         if (!res.ok) throw new Error("Failed to load post")
 
         const post = (await res.json()) as PostDTO
@@ -52,15 +63,18 @@ export default function WriteClient({ category, editId }: Props) {
     return () => {
       ignore = true
     }
-  }, [editId])
+  }, [resolvedEditId])
 
   const handleSave = async () => {
     setLoading(true)
     setErrorMsg(null)
 
     try {
-      const res = await fetch(editId ? `/api/posts/${editId}` : "/api/posts", {
-        method: editId ? "PUT" : "POST",
+      const url = resolvedEditId ? `/api/posts/${resolvedEditId}` : "/api/posts"
+      const method = resolvedEditId ? "PUT" : "POST"
+
+      const res = await fetch(url, {
+        method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title, content, category }),
       })
@@ -70,16 +84,20 @@ export default function WriteClient({ category, editId }: Props) {
         throw new Error(txt || "Save failed")
       }
 
+      // ✅ 저장 후 목록으로
       router.push(`/${category}`)
       router.refresh()
-    } catch (e: any) {
-      setErrorMsg(e?.message ?? "Failed to save post.")
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Failed to save post."
+      setErrorMsg(msg)
     } finally {
       setLoading(false)
     }
   }
 
-  if (initLoading) return <div className="text-neutral-400">Loading editor...</div>
+  if (initLoading) {
+    return <div className="text-neutral-400 px-6 py-12">Loading editor...</div>
+  }
 
   return (
     <div className="max-w-4xl py-12 px-6 space-y-8">
@@ -96,11 +114,12 @@ export default function WriteClient({ category, editId }: Props) {
 
       <div className="flex justify-end">
         <button
+          type="button"
           onClick={handleSave}
           disabled={loading}
           className="px-6 py-2 bg-white text-black rounded-lg disabled:opacity-50"
         >
-          {loading ? "Saving..." : editId ? "Update" : "Publish"}
+          {loading ? "Saving..." : resolvedEditId ? "Update" : "Publish"}
         </button>
       </div>
     </div>

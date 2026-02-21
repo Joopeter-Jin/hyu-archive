@@ -1,12 +1,12 @@
+import { Suspense } from "react"
 import WriteClient from "./WriteClient"
 
 export const dynamic = "force-dynamic"
 
-export default async function WritePage({
-  searchParams,
-}: {
-  searchParams: Promise<{ edit?: string }>
-}) {
-  const sp = await searchParams
-  return <WriteClient category="reading-notes" editId={sp?.edit ?? null} />
+export default function WritePage() {
+  return (
+    <Suspense fallback={<div className="p-6 text-neutral-400">Loading...</div>}>
+      <WriteClient category="concepts" />
+    </Suspense>
+  )
 }
