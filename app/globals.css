@@ -70,4 +70,38 @@
   color: rgba(255,255,255,0.35);
 }
 
+.bn-cap-wrap {
+  margin-top: 8px;
+}
+
+.bn-cap-input {
+  width: 100%;
+  font-size: 13px;
+  color: rgb(245 245 245);
+  background: rgb(10 10 10);
+  border: 1px solid rgb(38 38 38);
+  border-radius: 10px;
+  padding: 8px 10px;
+  outline: none;
+}
+
+.bn-cap-input.hidden {
+  display: none;
+}
+
+.bn-img-caption.hidden {
+  display: none;
+}
+
+.bn-img-caption {
+  font-size: 13px;
+  color: rgb(163 163 163);
+  cursor: text;
+}
+
+.bn-img-caption[data-empty="true"]::before {
+  content: "Write a caption…";
+  color: rgb(115 115 115);
+}
+
 }

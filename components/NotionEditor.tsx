@@ -1,7 +1,9 @@
 "use client"
 
+import React, { useEffect, useMemo, useRef, useState } from "react"
 import { useEditor, EditorContent, type Editor } from "@tiptap/react"
 import { Extension } from "@tiptap/core"
+
 import StarterKit from "@tiptap/starter-kit"
 import Underline from "@tiptap/extension-underline"
 import Dropcursor from "@tiptap/extension-dropcursor"
@@ -10,8 +12,6 @@ import Link from "@tiptap/extension-link"
 import Suggestion from "@tiptap/suggestion"
 import Image from "@tiptap/extension-image"
 import DragHandle from "@tiptap/extension-drag-handle"
-
-import React, { useEffect, useMemo, useRef, useState } from "react"
 
 interface Props {
   content?: string
@@ -34,7 +34,7 @@ async function uploadToServer(file: File): Promise<string> {
 }
 
 /* ---------------------------
-   Resizable Image Node
+   Resizable Image Node (no caption / no alt)
 ---------------------------- */
 
 const ResizableImage = Image.extend({
@@ -48,8 +48,7 @@ const ResizableImage = Image.extend({
           const w = el.getAttribute("data-width")
           return w ? Number(w) : null
         },
-        renderHTML: (attrs) =>
-          attrs.width ? { "data-width": String(attrs.width) } : {},
+        renderHTML: (attrs) => (attrs.width ? { "data-width": String(attrs.width) } : {}),
       },
 
       widthPct: {
@@ -68,19 +67,6 @@ const ResizableImage = Image.extend({
         renderHTML: (attrs) => ({ "data-align": attrs.align }),
       },
 
-      alt: {
-        default: "" as string,
-        parseHTML: (el) => el.getAttribute("alt") ?? "",
-        renderHTML: (attrs) => (attrs.alt ? { alt: attrs.alt } : {}),
-      },
-
-      caption: {
-        default: "" as string,
-        parseHTML: (el) => el.getAttribute("data-caption") ?? "",
-        renderHTML: (attrs) =>
-          attrs.caption ? { "data-caption": attrs.caption } : {},
-      },
-
       rounded: {
         default: true as boolean,
         parseHTML: (el) => el.getAttribute("data-rounded") !== "false",
@@ -97,25 +83,23 @@ const ResizableImage = Image.extend({
 
   addNodeView() {
     return ({ node, editor, getPos }) => {
+      // figure wrapper
       const wrapper = document.createElement("figure")
       wrapper.className = "relative my-4 max-w-full"
       wrapper.style.display = "block"
+
+      // alignment via text-align on wrapper
+      const applyAlign = (align: "left" | "center" | "right") => {
+        wrapper.style.textAlign = align
+      }
 
       const inner = document.createElement("div")
       inner.className = "relative inline-block max-w-full"
 
       const img = document.createElement("img")
       img.src = node.attrs.src
-      img.alt = node.attrs.alt || ""
       img.draggable = false
       img.className = "block max-w-full h-auto select-none"
-
-      // style apply helpers
-      const applyAlign = (align: "left" | "center" | "right") => {
-        if (align === "left") wrapper.style.textAlign = "left"
-        if (align === "center") wrapper.style.textAlign = "center"
-        if (align === "right") wrapper.style.textAlign = "right"
-      }
 
       const applyWidth = (attrs: any) => {
         if (attrs.widthPct) img.style.width = `${attrs.widthPct}%`
@@ -128,34 +112,32 @@ const ResizableImage = Image.extend({
         img.style.border = attrs.bordered ? "1px solid rgb(38 38 38)" : "none"
       }
 
-      // caption
-      const cap = document.createElement("figcaption")
-      cap.className =
-        "mt-2 text-sm text-neutral-400 outline-none focus:text-neutral-200"
-      cap.contentEditable = String(editor.isEditable)
-      cap.dataset.placeholder = "Write a caption…"
-      cap.innerText = node.attrs.caption || ""
-
-      // placeholder behavior for caption
-      const syncCaptionPlaceholder = () => {
-        if (!cap.innerText.trim()) cap.classList.add("empty-caption")
-        else cap.classList.remove("empty-caption")
+      const setAttrs = (attrs: Record<string, any>) => {
+        const pos = typeof getPos === "function" ? getPos() : null
+        if (pos == null) return
+        editor
+          .chain()
+          .command(({ tr }) => {
+            tr.setNodeMarkup(pos, undefined, { ...node.attrs, ...attrs })
+            return true
+          })
+          .run()
       }
-      syncCaptionPlaceholder()
 
-      cap.addEventListener("input", () => {
-        const text = cap.innerText
-        setAttrs({ caption: text })
-        syncCaptionPlaceholder()
-      })
+      const delNode = () => {
+        const pos = typeof getPos === "function" ? getPos() : null
+        if (pos == null) return
+        editor
+          .chain()
+          .focus()
+          .command(({ tr }) => {
+            tr.delete(pos, pos + node.nodeSize)
+            return true
+          })
+          .run()
+      }
 
-      // handle
-      const handle = document.createElement("div")
-      handle.className =
-        "absolute right-2 bottom-2 w-3 h-3 rounded-sm bg-white/80 cursor-se-resize shadow"
-      handle.title = "Drag to resize"
-
-      // popover
+      // popover (minimal)
       const pop = document.createElement("div")
       pop.className =
         "hidden absolute left-2 top-2 z-20 rounded-xl border border-neutral-800 bg-neutral-950 shadow-lg p-2"
@@ -199,54 +181,6 @@ const ResizableImage = Image.extend({
         return b
       }
 
-      const mkInput = (label: string, getVal: () => string, setValFn: (v: string) => void) => {
-        const row = document.createElement("div")
-        row.className = "mt-2 flex items-center gap-2"
-        const lab = document.createElement("div")
-        lab.className = "text-xs text-neutral-500 w-8"
-        lab.innerText = label
-
-        const input = document.createElement("input")
-        input.className =
-          "flex-1 text-xs bg-neutral-900 border border-neutral-800 rounded-lg px-2 py-1 text-neutral-200 outline-none"
-        input.value = getVal()
-        input.placeholder = label === "Alt" ? "Describe image…" : ""
-
-        input.onmousedown = (e) => e.stopPropagation()
-        input.oninput = () => setValFn(input.value)
-
-        row.appendChild(lab)
-        row.appendChild(input)
-        return row
-      }
-
-      const setAttrs = (attrs: Record<string, any>) => {
-        const pos = typeof getPos === "function" ? getPos() : null
-        if (pos == null) return
-        editor
-          .chain()
-          .focus()
-          .command(({ tr }) => {
-            tr.setNodeMarkup(pos, undefined, { ...node.attrs, ...attrs })
-            return true
-          })
-          .run()
-      }
-
-      const delNode = () => {
-        const pos = typeof getPos === "function" ? getPos() : null
-        if (pos == null) return
-        editor
-          .chain()
-          .focus()
-          .command(({ tr }) => {
-            tr.delete(pos, pos + node.nodeSize)
-            return true
-          })
-          .run()
-      }
-
-      // pop content
       const row1 = document.createElement("div")
       row1.className = "flex items-center gap-1"
       row1.appendChild(mkBtn("Left", () => setAttrs({ align: "left" })))
@@ -263,18 +197,10 @@ const ResizableImage = Image.extend({
 
       const row3 = document.createElement("div")
       row3.className = "mt-2 flex items-center gap-1"
-      row3.appendChild(
-        mkToggle("Round", () => !!node.attrs.rounded, (v) => setAttrs({ rounded: v }))
-      )
-      row3.appendChild(
-        mkToggle("Border", () => !!node.attrs.bordered, (v) => setAttrs({ bordered: v }))
-      )
+      row3.appendChild(mkToggle("Round", () => !!node.attrs.rounded, (v) => setAttrs({ rounded: v })))
+      row3.appendChild(mkToggle("Border", () => !!node.attrs.bordered, (v) => setAttrs({ bordered: v })))
       row3.appendChild(mkBtn("Delete", delNode))
       pop.appendChild(row3)
-
-      pop.appendChild(
-        mkInput("Alt", () => String(node.attrs.alt ?? ""), (v) => setAttrs({ alt: v }))
-      )
 
       const showPop = () => pop.classList.remove("hidden")
       const hidePop = () => pop.classList.add("hidden")
@@ -288,7 +214,12 @@ const ResizableImage = Image.extend({
       const onDocClick = () => hidePop()
       document.addEventListener("click", onDocClick)
 
-      // resize drag
+      // resize handle
+      const handle = document.createElement("div")
+      handle.className =
+        "absolute right-2 bottom-2 w-3 h-3 rounded-sm bg-white/80 cursor-se-resize shadow"
+      handle.title = "Drag to resize"
+
       let startX = 0
       let startWidth = 0
       let dragging = false
@@ -330,27 +261,20 @@ const ResizableImage = Image.extend({
       inner.appendChild(img)
       inner.appendChild(handle)
       wrapper.appendChild(inner)
-      wrapper.appendChild(cap)
 
       return {
         dom: wrapper,
-
         update: (updatedNode) => {
           if (updatedNode.type.name !== node.type.name) return false
           node = updatedNode
 
           img.src = updatedNode.attrs.src
-          img.alt = updatedNode.attrs.alt || ""
-          cap.contentEditable = String(editor.isEditable)
-          cap.innerText = updatedNode.attrs.caption || ""
-
           applyAlign(updatedNode.attrs.align ?? "center")
           applyWidth(updatedNode.attrs)
           applyDecor(updatedNode.attrs)
-          syncCaptionPlaceholder()
+
           return true
         },
-
         destroy: () => {
           handle.removeEventListener("mousedown", onMouseDown)
           document.removeEventListener("mousemove", onMouseMove)
@@ -362,14 +286,12 @@ const ResizableImage = Image.extend({
   },
 })
 
-
 /* ---------------------------
    Slash menu
 ---------------------------- */
 
 type SlashItem = {
   title: string
-  description?: string
   keywords?: string[]
   command: (opts: { editor: Editor; range: { from: number; to: number } }) => void
 }
@@ -436,12 +358,8 @@ function createSlashCommand(openImagePicker: () => void) {
     addProseMirrorPlugins() {
       let popup: HTMLDivElement | null = null
       let activeIndex = 0
-
-      // ✅ 타입 문제 회피: SuggestionKeyDownProps에 없는 items/command를 직접 저장해서 사용
       let currentItems: SlashItem[] = []
-      let currentCommand:
-        | ((item: SlashItem) => void)
-        | null = null
+      let currentCommand: ((item: SlashItem) => void) | null = null
 
       const close = () => {
         popup?.remove()
@@ -471,20 +389,9 @@ function createSlashCommand(openImagePicker: () => void) {
           const row = document.createElement("button")
           row.type = "button"
           row.className =
-            "w-full text-left px-3 py-2 hover:bg-neutral-900 transition flex flex-col"
+            "w-full text-left px-3 py-2 hover:bg-neutral-900 transition"
           if (idx === activeIndex) row.classList.add("bg-neutral-900")
-
-          const title = document.createElement("div")
-          title.className = "text-sm text-white"
-          title.textContent = item.title
-
-          const desc = document.createElement("div")
-          desc.className = "text-xs text-neutral-400"
-          desc.textContent = item.description ?? ""
-
-          row.appendChild(title)
-          if (item.description) row.appendChild(desc)
-
+          row.textContent = item.title
           row.onclick = () => currentCommand?.(item)
           popup!.appendChild(row)
         })
@@ -503,15 +410,12 @@ function createSlashCommand(openImagePicker: () => void) {
             if (!q) return all
 
             return all.filter((it) => {
-              const hay = [it.title, ...(it.keywords ?? []), it.description ?? ""]
-                .join(" ")
-                .toLowerCase()
+              const hay = [it.title, ...(it.keywords ?? [])].join(" ").toLowerCase()
               return hay.includes(q)
             })
           },
 
           command: ({ editor, range, props }: any) => {
-            // props는 SlashItem
             ;(props as SlashItem).command({ editor, range })
           },
 
@@ -560,7 +464,7 @@ function createSlashCommand(openImagePicker: () => void) {
 }
 
 /* ---------------------------
-   Floating toolbar
+   Floating toolbar (Bold/Italic/Link)
 ---------------------------- */
 
 function FloatingToolbar({
@@ -568,7 +472,7 @@ function FloatingToolbar({
   containerRef,
 }: {
   editor: Editor
-  containerRef: React.RefObject<HTMLDivElement | null>
+  containerRef: React.RefObject<HTMLDivElement>
 }) {
   const [pos, setPos] = useState<{ x: number; y: number; show: boolean }>({
     x: 0,
@@ -589,9 +493,7 @@ function FloatingToolbar({
       const start = editor.view.coordsAtPos(from)
       const end = editor.view.coordsAtPos(to)
 
-      const box = containerRef.current?.getBoundingClientRect()
-      if (!box) return
-
+      const box = containerRef.current.getBoundingClientRect()
       const x = (start.left + end.right) / 2 - box.left
       const y = Math.min(start.top, end.top) - box.top - 12
 
@@ -661,7 +563,7 @@ function FloatingToolbar({
 }
 
 /* ---------------------------
-   Block "+" button
+   Block "+" button (left of current line)
 ---------------------------- */
 
 function BlockPlusButton({
@@ -670,7 +572,7 @@ function BlockPlusButton({
   onOpen,
 }: {
   editor: Editor
-  containerRef: React.RefObject<HTMLDivElement | null>
+  containerRef: React.RefObject<HTMLDivElement>
   onOpen: () => void
 }) {
   const [pos, setPos] = useState<{ x: number; y: number; show: boolean }>({
@@ -687,11 +589,11 @@ function BlockPlusButton({
         return
       }
 
-      const box = containerRef.current?.getBoundingClientRect()
-      if (!box) return
-
+      const box = containerRef.current.getBoundingClientRect()
       const coords = editor.view.coordsAtPos(sel.from)
-      const x = 12
+
+      // 왼쪽 gutter 영역(패딩 기준)
+      const x = 10
       const y = coords.top - box.top + 6
 
       setPos({ x, y, show: true })
@@ -725,12 +627,12 @@ function BlockPlusButton({
 }
 
 /* ---------------------------
-   Main Editor (final)
+   Final NotionEditor (no caption)
 ---------------------------- */
 
 export default function NotionEditor({ content, onChange }: Props) {
-  const fileInputRef = useRef<HTMLInputElement | null>(null)
-  const containerRef = useRef<HTMLDivElement | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
 
   const openImagePicker = () => fileInputRef.current?.click()
   const SlashCommand = useMemo(() => createSlashCommand(openImagePicker), [])
@@ -740,28 +642,33 @@ export default function NotionEditor({ content, onChange }: Props) {
 
     extensions: [
       StarterKit,
-      DragHandle.configure({
-      // Notion처럼 왼쪽에만 핸들
-      render: () => {
-      const el = document.createElement("div")
-      el.className =
-      "tt-drag-handle opacity-0 group-hover:opacity-100 transition"
-      el.innerHTML = "⋮⋮"
-      return el
-      },
-      }),
       Underline,
       Dropcursor,
+
+      // ✅ Notion-style drag handle for blocks
+      DragHandle.configure({
+        render() {
+          const el = document.createElement("div")
+          el.className =
+            "tt-drag-handle opacity-0 group-hover:opacity-100 transition text-neutral-400 hover:text-white"
+          el.textContent = "⋮⋮"
+          return el
+        },
+      }),
+
       Link.configure({
         openOnClick: false,
         autolink: true,
         linkOnPaste: true,
         HTMLAttributes: { rel: "noopener noreferrer", target: "_blank" },
       }),
+
       ResizableImage.configure({ inline: false }),
+
       Placeholder.configure({
         placeholder: "Type '/' for commands, or drop an image…",
       }),
+
       SlashCommand,
     ],
 
@@ -769,12 +676,16 @@ export default function NotionEditor({ content, onChange }: Props) {
 
     editorProps: {
       attributes: {
-        class: "prose prose-invert max-w-none focus:outline-none min-h-[520px] px-10 py-6",
+        // 왼쪽 여백을 만들어야 (+, ⋮⋮)가 노션처럼 보임
+        class:
+          "prose prose-invert max-w-none focus:outline-none min-h-[520px] px-12 py-6",
       },
 
+      // ✅ drag&drop image
       handleDrop: (_view, event) => {
         const files = event.dataTransfer?.files
         if (!files?.length) return false
+
         const file = files[0]
         if (!file.type.startsWith("image/")) return false
 
@@ -790,6 +701,7 @@ export default function NotionEditor({ content, onChange }: Props) {
         return true
       },
 
+      // ✅ paste image
       handlePaste: (_view, event) => {
         const items = event.clipboardData?.items
         if (!items) return false
@@ -818,13 +730,31 @@ export default function NotionEditor({ content, onChange }: Props) {
     },
   })
 
-  if (!editor) return null
+  // ✅ edit 시 content 변경을 editor에 반영
+  const lastContentRef = useRef<string | undefined>(undefined)
+  useEffect(() => {
+    if (!editor) return
+    if (typeof content !== "string") return
+    if (lastContentRef.current === content) return
+
+    const current = editor.getHTML()
+    if (current !== content) {
+      // TipTap v3: emitUpdate 옵션
+      editor.commands.setContent(content, { emitUpdate: false })
+    }
+    lastContentRef.current = content
+  }, [editor, content])
+
+  if (!editor || !containerRef.current) {
+    // editor 초기화 전에는 컨테이너가 없어서 툴바 위치 계산이 불가능할 수 있음
+    // (초기 렌더 안전)
+  }
 
   const onPickImage = async (f: File | null) => {
     if (!f) return
     try {
       const url = await uploadToServer(f)
-      editor.chain().focus().setImage({ src: url }).run()
+      editor?.chain().focus().setImage({ src: url }).run()
     } catch {
       alert("Image upload failed")
     } finally {
@@ -833,7 +763,7 @@ export default function NotionEditor({ content, onChange }: Props) {
   }
 
   const openSlashMenuAtCursor = () => {
-    editor.chain().focus().insertContent("/").run()
+    editor?.chain().focus().insertContent("/").run()
   }
 
   return (
@@ -842,7 +772,7 @@ export default function NotionEditor({ content, onChange }: Props) {
         <button
           type="button"
           className="px-3 py-1 text-sm border border-neutral-800 rounded hover:bg-neutral-900"
-          onClick={() => fileInputRef.current?.click()}
+          onClick={openImagePicker}
         >
           Insert image
         </button>
@@ -858,15 +788,49 @@ export default function NotionEditor({ content, onChange }: Props) {
         <div className="text-xs text-neutral-500">Drag & drop / Paste supported</div>
       </div>
 
-      <div ref={containerRef} className="relative border border-neutral-800 rounded-xl bg-neutral-950 group">
-        <FloatingToolbar editor={editor} containerRef={containerRef} />
-        <BlockPlusButton editor={editor} containerRef={containerRef} onOpen={openSlashMenuAtCursor} />
+      <div
+        ref={containerRef}
+        className="relative border border-neutral-800 rounded-xl bg-neutral-950 group"
+      >
+        {editor && containerRef.current && (
+          <>
+            <FloatingToolbar editor={editor} containerRef={containerRef as React.RefObject<HTMLDivElement>} />
+            <BlockPlusButton
+              editor={editor}
+              containerRef={containerRef as React.RefObject<HTMLDivElement>}
+              onOpen={openSlashMenuAtCursor}
+            />
+          </>
+        )}
+
         <EditorContent editor={editor} />
       </div>
 
       <div className="text-xs text-neutral-500">
-        Tip: 이미지 클릭 후 오른쪽 아래 핸들을 드래그하면 크기 조절됩니다.
+        Tip: 이미지 클릭 → 프리셋/정렬/삭제. 오른쪽 아래 핸들 드래그 → 자유 리사이즈.
       </div>
+
+      {/* drag-handle 스타일(필수) */}
+      <style jsx global>{`
+        /* TipTap DragHandle extension renders elements with this class.
+           We give it a position in the left gutter like Notion. */
+        .tt-drag-handle {
+          position: absolute;
+          left: 12px;
+          transform: translateY(2px);
+          width: 18px;
+          height: 18px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: grab;
+          user-select: none;
+          z-index: 10;
+        }
+        .tt-drag-handle:active {
+          cursor: grabbing;
+        }
+      `}</style>
     </div>
   )
 }
