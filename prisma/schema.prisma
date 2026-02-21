@@ -8,7 +8,32 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
-// NextAuth models
+//////////////////////////////////////////////////
+// ENUMS
+//////////////////////////////////////////////////
+
+enum Role {
+  ADMIN
+  PROFESSOR
+  GRAD
+  CONTRIBUTOR
+  USER
+}
+
+enum VoteTargetType {
+  POST
+  COMMENT
+}
+
+enum VoteValue {
+  UP
+  DOWN
+}
+
+//////////////////////////////////////////////////
+// NextAuth models (기존 유지 + relations 추가)
+//////////////////////////////////////////////////
+
 model User {
   id            String    @id @default(cuid())
   name          String?
@@ -16,11 +41,16 @@ model User {
   emailVerified DateTime?
   image         String?
 
-  accounts      Account[]
-  sessions      Session[]
-  posts         Post[]
+  accounts Account[]
+  sessions Session[]
 
-  createdAt     DateTime  @default(now())
+  posts    Post[]
+  comments Comment[]
+  votes    Vote[]
+
+  profile UserProfile?
+
+  createdAt DateTime @default(now())
 }
 
 model Account {
@@ -37,7 +67,7 @@ model Account {
   id_token          String?
   session_state     String?
 
-  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerAccountId])
 }
@@ -48,7 +78,7 @@ model Session {
   userId       String
   expires      DateTime
 
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model VerificationToken {
@@ -59,18 +89,94 @@ model VerificationToken {
   @@unique([identifier, token])
 }
 
-// posts table on Supabase(Postgres)
-// - id: uuid
-// - author_id: text (NextAuth User.id is string)
+//////////////////////////////////////////////////
+// User Profile (필명 + 등급)
+//////////////////////////////////////////////////
+
+model UserProfile {
+  userId String @id
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  displayName String @unique
+  role        Role   @default(USER)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("user_profiles")
+}
+
+//////////////////////////////////////////////////
+// Posts (기존 유지 + votes/comments 연결)
+//////////////////////////////////////////////////
+
 model Post {
   id        String   @id @default(uuid()) @db.Uuid
   title     String
   content   String
   category  String
   createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-  authorId  String   @map("author_id")
-  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  views     Int      @default(0)
+  authorId String @map("author_id")
+  author   User   @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  views Int @default(0)
+
+  comments Comment[]
+  votes    Vote[]    @relation("PostVotes")
+
   @@map("posts")
+}
+
+//////////////////////////////////////////////////
+// Comments
+//////////////////////////////////////////////////
+
+model Comment {
+  id     String @id @default(uuid()) @db.Uuid
+  postId String @map("post_id") @db.Uuid
+  post   Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  content String // TipTap HTML 저장
+
+  authorId String @map("author_id")
+  author   User   @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  votes Vote[] @relation("CommentVotes")
+
+  @@index([postId])
+  @@map("comments")
+}
+
+//////////////////////////////////////////////////
+// Votes (Post + Comment 공통)
+//////////////////////////////////////////////////
+
+model Vote {
+  id String @id @default(uuid()) @db.Uuid
+
+  // ✅ polymorphic을 FK 두 개로 분리
+  postId    String? @map("post_id") @db.Uuid
+  commentId String? @map("comment_id") @db.Uuid
+
+  value VoteValue
+
+  userId String @map("user_id")
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  post    Post?    @relation("PostVotes", fields: [postId], references: [id], onDelete: Cascade, map: "votes_post_id_fkey")
+  comment Comment? @relation("CommentVotes", fields: [commentId], references: [id], onDelete: Cascade, map: "votes_comment_id_fkey")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // ✅ 같은 유저는 같은 글에 1번만 투표
+  @@unique([userId, postId])
+  @@unique([userId, commentId])
+  @@index([postId])
+  @@index([commentId])
+  @@map("votes")
 }
