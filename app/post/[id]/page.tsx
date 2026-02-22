@@ -5,6 +5,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/app/api/auth/[...nextauth]/route"
 import PostActions from "@/components/PostActions"
 import Comments from "@/components/comments/Comments"
+import VoteButtons from "@/components/votes/VoteButtons"
 
 export default async function PostPage({
   params,
@@ -47,9 +48,9 @@ export default async function PostPage({
         <div className="flex items-start justify-between gap-4">
           <div className="space-y-2">
             <h1 className="text-4xl font-serif font-bold">{post.title}</h1>
-
             <div className="text-sm text-neutral-500">
               {createdAtText} · {post.category} · views {post.views}
+                <VoteButtons type="POST" targetId={post.id} />
             </div>
           </div>
 
@@ -70,6 +71,7 @@ export default async function PostPage({
 
       {/* ✅ Comments */}
       <Comments postId={post.id} />
+        <VoteButtons type="POST" targetId={post.id} />
     </div>
   )
 }
