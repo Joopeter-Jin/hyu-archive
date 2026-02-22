@@ -4,7 +4,9 @@ import { prisma } from "@/lib/prisma"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/app/api/auth/[...nextauth]/route"
 
-export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
+type Ctx = { params: Promise<{ id: string }> }
+
+export async function GET(_req: Request, ctx: Ctx) {
   const { id } = await ctx.params
 
   const post = await prisma.post.findUnique({
@@ -15,6 +17,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
       content: true,
       category: true,
       createdAt: true,
+      updatedAt: true,
       authorId: true,
       views: true,
     },
@@ -24,16 +27,20 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
   return NextResponse.json(post, { status: 200 })
 }
 
-export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }) {
+export async function PUT(req: Request, ctx: Ctx) {
   const { id } = await ctx.params
 
   const session = await getServerSession(authOptions)
   const userId = (session?.user as any)?.id as string | undefined
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-  const body = await req.json()
+  const body = await req.json().catch(() => ({}))
   const title = String(body.title ?? "").trim()
   const content = String(body.content ?? "")
+  const category = String(body.category ?? "").trim()
+
+  if (!title) return NextResponse.json({ error: "Title is required" }, { status: 400 })
+  if (!category) return NextResponse.json({ error: "Category is required" }, { status: 400 })
 
   const existing = await prisma.post.findUnique({
     where: { id },
@@ -44,14 +51,14 @@ export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }
 
   const updated = await prisma.post.update({
     where: { id },
-    data: { title, content },
+    data: { title, content, category },
     select: { id: true, category: true },
   })
 
   return NextResponse.json(updated, { status: 200 })
 }
 
-export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string }> }) {
+export async function DELETE(_req: Request, ctx: Ctx) {
   const { id } = await ctx.params
 
   const session = await getServerSession(authOptions)
