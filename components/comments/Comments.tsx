@@ -3,6 +3,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { useSession, signIn } from "next-auth/react"
+import VoteButtons from "@/components/votes/VoteButtons"
 
 type Role = "ADMIN" | "PROFESSOR" | "GRAD" | "CONTRIBUTOR" | "USER"
 
@@ -28,15 +29,15 @@ type CommentNode = {
 function roleLabel(role: Role) {
   switch (role) {
     case "ADMIN":
-      return "관리자"
+      return "Admin"
     case "PROFESSOR":
-      return "교수"
+      return "Professor"
     case "GRAD":
-      return "대학원생"
+      return "Graduate"
     case "CONTRIBUTOR":
-      return "기고자"
+      return "Contributor"
     default:
-      return "일반"
+      return "User"
   }
 }
 
@@ -48,7 +49,6 @@ export default function Comments({ postId }: { postId: string }) {
   const [loading, setLoading] = useState(true)
   const [posting, setPosting] = useState(false)
   const [error, setError] = useState<string | null>(null)
-
   const [newText, setNewText] = useState("")
 
   const load = async () => {
@@ -70,7 +70,6 @@ export default function Comments({ postId }: { postId: string }) {
 
   useEffect(() => {
     load()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [postId])
 
   const onCreate = async (content: string, parentId: string | null) => {
@@ -117,36 +116,31 @@ export default function Comments({ postId }: { postId: string }) {
 
   return (
     <section className="mt-10 border-t border-neutral-900 pt-8">
-      <div className="flex items-end justify-between">
-        <h2 className="text-lg font-semibold">Comments {count}</h2>
-      </div>
+      <h2 className="text-lg font-semibold">Comments {count}</h2>
 
       {error && <div className="mt-3 text-sm text-red-400">{error}</div>}
 
-      {/* 작성창 */}
       <div className="mt-4 rounded-xl border border-neutral-800 bg-neutral-950 p-4">
         {status !== "authenticated" ? (
           <div className="flex items-center justify-between gap-3">
             <div className="text-sm text-neutral-400">Please login to leave comments</div>
             <button
-              type="button"
               className="px-3 py-1.5 rounded-lg bg-white text-black text-sm"
               onClick={() => signIn("google")}
             >
-              Google 로그인
+              Login with Google
             </button>
           </div>
         ) : (
           <div className="space-y-3">
             <textarea
               className="w-full min-h-[90px] resize-y rounded-lg bg-neutral-950 border border-neutral-800 px-3 py-2 outline-none text-sm"
-              placeholder="Input your comments"
+              placeholder="Write your comment..."
               value={newText}
               onChange={(e) => setNewText(e.target.value)}
             />
             <div className="flex justify-end">
               <button
-                type="button"
                 className="px-4 py-2 rounded-lg bg-white text-black text-sm disabled:opacity-50"
                 disabled={posting || !newText.trim()}
                 onClick={async () => {
@@ -155,14 +149,13 @@ export default function Comments({ postId }: { postId: string }) {
                   await onCreate(txt, null)
                 }}
               >
-                {posting ? "Registering..." : "Register comments"}
+                {posting ? "Posting..." : "Post Comment"}
               </button>
             </div>
           </div>
         )}
       </div>
 
-      {/* 목록 */}
       <div className="mt-6 space-y-4">
         {loading ? (
           <div className="text-sm text-neutral-400">Loading comments...</div>
@@ -193,15 +186,8 @@ function CommentItem({
   onReply,
   onDelete,
   depth,
-}: {
-  node: CommentNode
-  myId?: string
-  canReply: boolean
-  onReply: (content: string, parentId: string | null) => Promise<void>
-  onDelete: (id: string) => Promise<void>
-  depth: number
-}) {
-  const displayName = node.author.profile?.displayName ?? node.author.name ?? "익명"
+}: any) {
+  const displayName = node.author.profile?.displayName ?? node.author.name ?? "Anonymous"
   const role = node.author.profile?.role ?? "USER"
   const mine = myId && node.authorId === myId
 
@@ -212,51 +198,51 @@ function CommentItem({
   return (
     <div className="space-y-2" style={{ marginLeft: depth === 0 ? 0 : 16 }}>
       <div className="rounded-xl border border-neutral-900 bg-black/30 p-4">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
+        <div className="flex items-start justify-between gap-3">
+          <div>
             <div className="text-sm text-white">{displayName}</div>
-            <div className="text-xs text-neutral-400">· {roleLabel(role)}</div>
-            <div className="text-xs text-neutral-600">
-              · {new Date(node.createdAt).toLocaleString()}
+            <div className="text-xs text-neutral-500">
+              {roleLabel(role)} · {new Date(node.createdAt).toLocaleString()}
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            {canReply && (
-              <button
-                type="button"
-                className="text-xs text-neutral-300 hover:text-white"
-                onClick={() => setReplyOpen((v) => !v)}
-              >
-                답글
-              </button>
-            )}
-            {mine && !node.isDeleted && (
-              <button
-                type="button"
-                className="text-xs text-red-300 hover:text-red-200"
-                onClick={async () => {
-                  if (!confirm("Would you like to delete this comment? The reply will remain.")) return
-                  setBusy(true)
-                  try {
-                    await onDelete(node.id)
-                  } finally {
-                    setBusy(false)
-                  }
-                }}
-                disabled={busy}
-              >
-                {busy ? "삭제 중..." : "삭제"}
-              </button>
-            )}
-          </div>
+          <VoteButtons type="COMMENT" targetId={node.id} />
         </div>
 
         <div className="mt-2 text-sm leading-6">
           {node.isDeleted ? (
-            <span className="text-neutral-500">(Deleted comments)</span>
+            <span className="text-neutral-500">(This comment has been deleted)</span>
           ) : (
             <span className="text-neutral-100 whitespace-pre-wrap">{node.content}</span>
+          )}
+        </div>
+
+        <div className="mt-3 flex gap-3">
+          {canReply && (
+            <button
+              className="text-xs text-neutral-300 hover:text-white"
+              onClick={() => setReplyOpen((v) => !v)}
+            >
+              Reply
+            </button>
+          )}
+
+          {mine && !node.isDeleted && (
+            <button
+              className="text-xs text-red-400 hover:text-red-300"
+              onClick={async () => {
+                if (!confirm("Are you sure you want to delete this comment? Replies will remain.")) return
+                setBusy(true)
+                try {
+                  await onDelete(node.id)
+                } finally {
+                  setBusy(false)
+                }
+              }}
+              disabled={busy}
+            >
+              {busy ? "Deleting..." : "Delete"}
+            </button>
           )}
         </div>
 
@@ -264,24 +250,22 @@ function CommentItem({
           <div className="mt-3 space-y-2">
             <textarea
               className="w-full min-h-[70px] resize-y rounded-lg bg-neutral-950 border border-neutral-800 px-3 py-2 outline-none text-sm"
-              placeholder="답글을 입력하세요…"
+              placeholder="Write a reply..."
               value={replyText}
               onChange={(e) => setReplyText(e.target.value)}
             />
             <div className="flex justify-end gap-2">
               <button
-                type="button"
-                className="px-3 py-1.5 rounded-lg border border-neutral-800 text-sm text-neutral-200 hover:bg-neutral-900"
+                className="px-3 py-1.5 rounded-lg border border-neutral-800 text-sm"
                 onClick={() => {
                   setReplyOpen(false)
                   setReplyText("")
                 }}
               >
-                취소
+                Cancel
               </button>
               <button
-                type="button"
-                className="px-3 py-1.5 rounded-lg bg-white text-black text-sm disabled:opacity-50"
+                className="px-3 py-1.5 rounded-lg bg-white text-black text-sm"
                 disabled={!replyText.trim()}
                 onClick={async () => {
                   const txt = replyText
@@ -290,7 +274,7 @@ function CommentItem({
                   await onReply(txt, node.id)
                 }}
               >
-                답글 등록
+                Post Reply
               </button>
             </div>
           </div>
@@ -299,7 +283,7 @@ function CommentItem({
 
       {node.replies?.length > 0 && (
         <div className="space-y-3">
-          {node.replies.map((r) => (
+          {node.replies.map((r: any) => (
             <CommentItem
               key={r.id}
               node={r}

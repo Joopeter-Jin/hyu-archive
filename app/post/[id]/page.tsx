@@ -71,7 +71,6 @@ export default async function PostPage({
 
       {/* ✅ Comments */}
       <Comments postId={post.id} />
-        <VoteButtons type="POST" targetId={post.id} />
     </div>
   )
 }
