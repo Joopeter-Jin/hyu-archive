@@ -17,11 +17,18 @@ export async function GET(_req: Request, ctx: Ctx) {
       content: true,
       category: true,
       createdAt: true,
-      updatedAt: true,
       authorId: true,
       views: true,
+      author: {
+        select: {
+          id: true,
+          name: true,
+          profile: { select: { displayName: true, role: true } },
+        },
+      },
     },
-  })
+  }  
+)  
 
   if (!post) return NextResponse.json({ error: "Not found" }, { status: 404 })
   return NextResponse.json(post, { status: 200 })

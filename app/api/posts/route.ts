@@ -18,8 +18,16 @@ export async function GET(req: Request) {
       createdAt: true,
       authorId: true,
       views: true,
+      author: {
+      select: {
+        id: true,
+        name: true,
+        profile: { select: { displayName: true, role: true } },
+        },
+      },
     },
-  })
+  }
+)
 
   return NextResponse.json(posts, { status: 200 })
 }

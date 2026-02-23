@@ -30,6 +30,12 @@ enum VoteValue {
   DOWN
 }
 
+enum RoleRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 //////////////////////////////////////////////////
 // NextAuth models (기존 유지 + relations 추가)
 //////////////////////////////////////////////////
@@ -51,6 +57,9 @@ model User {
   profile UserProfile?
 
   createdAt DateTime @default(now())
+
+  roleRequests         RoleRequest[]
+  reviewedRoleRequests RoleRequest[] @relation("RoleRequestReviewer")
 }
 
 model Account {
@@ -138,8 +147,8 @@ model Comment {
   postId String @map("post_id") @db.Uuid
   post   Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
 
-  parentId String?  @map("parent_id") @db.Uuid
-  parent   Comment? @relation("CommentToReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  parentId String?   @map("parent_id") @db.Uuid
+  parent   Comment?  @relation("CommentToReplies", fields: [parentId], references: [id], onDelete: Cascade)
   replies  Comment[] @relation("CommentToReplies")
 
   content String // TipTap HTML 저장
@@ -186,4 +195,26 @@ model Vote {
   @@index([postId])
   @@index([commentId])
   @@map("votes")
+}
+
+model RoleRequest {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @map("user_id")
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  requestedRole Role    @map("requested_role")
+  reason        String? @db.Text
+
+  status RoleRequestStatus @default(PENDING)
+
+  reviewedAt DateTime? @map("reviewed_at")
+  reviewerId String?   @map("reviewer_id")
+  reviewer   User?     @relation("RoleRequestReviewer", fields: [reviewerId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([userId])
+  @@index([status])
+  @@map("role_requests")
 }

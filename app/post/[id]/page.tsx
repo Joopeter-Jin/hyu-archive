@@ -6,6 +6,7 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route"
 import PostActions from "@/components/PostActions"
 import Comments from "@/components/comments/Comments"
 import VoteButtons from "@/components/votes/VoteButtons"
+import RoleBadge from "@/components/profile/RoleBadge"
 
 export default async function PostPage({
   params,
@@ -30,13 +31,22 @@ export default async function PostPage({
         createdAt: true,
         authorId: true,
         views: true,
+        author: {
+          select: {
+            id: true,
+            name: true,
+            profile: { select: { displayName: true, role: true } },
       },
-    })
+    },
+  },
+})
     .catch(() => null)
 
   if (!post) return notFound()
 
   const isOwner = !!userId && userId === post.authorId
+  const authorName = post.author.profile?.displayName ?? post.author.name ?? "User"
+  const authorRole = post.author.profile?.role ?? "USER"
 
   // (선택) 서버 렌더링에서 locale 흔들림 줄이고 싶으면 고정 포맷 사용
   const createdAtText = new Date(post.createdAt).toISOString().replace("T", " ").slice(0, 16)
@@ -48,9 +58,15 @@ export default async function PostPage({
         <div className="flex items-start justify-between gap-4">
           <div className="space-y-2">
             <h1 className="text-4xl font-serif font-bold">{post.title}</h1>
-            <div className="text-sm text-neutral-500">
-              {createdAtText} · {post.category} · views {post.views}
-                <VoteButtons type="POST" targetId={post.id} />
+            <div className="text-sm text-neutral-500 flex items-center gap-2">
+              <span>{new Date(post.createdAt).toLocaleString()}</span>
+              <span>·</span>
+              <span>{post.category}</span>
+              <span>·</span>
+              <span>views {post.views}</span>
+              <span>·</span>
+              <span className="text-neutral-300">{authorName}</span>
+              <RoleBadge role={authorRole} />
             </div>
           </div>
 
