@@ -58,7 +58,7 @@ model User {
 
   createdAt DateTime @default(now())
 
-  roleRequests         RoleRequest[]
+  roleRequests         RoleRequest[] @relation("RoleRequestRequester")
   reviewedRoleRequests RoleRequest[] @relation("RoleRequestReviewer")
 }
 
@@ -199,22 +199,28 @@ model Vote {
 
 model RoleRequest {
   id     String @id @default(uuid()) @db.Uuid
+
+  // 요청자
   userId String @map("user_id")
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user   User   @relation("RoleRequestRequester", fields: [userId], references: [id], onDelete: Cascade)
 
-  requestedRole Role    @map("requested_role")
-  reason        String? @db.Text
+  requestedRole Role
+  status        RoleRequestStatus @default(PENDING)
 
-  status RoleRequestStatus @default(PENDING)
+  note      String?
+  adminNote String? @map("admin_note")
 
-  reviewedAt DateTime? @map("reviewed_at")
-  reviewerId String?   @map("reviewer_id")
-  reviewer   User?     @relation("RoleRequestReviewer", fields: [reviewerId], references: [id], onDelete: SetNull)
+  decidedAt DateTime? @map("decided_at")
+
+  // 리뷰어(관리자)
+  decidedBy String? @map("decided_by")
+  reviewer  User?   @relation("RoleRequestReviewer", fields: [decidedBy], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([userId])
   @@index([status])
+  @@index([decidedBy])
   @@map("role_requests")
 }

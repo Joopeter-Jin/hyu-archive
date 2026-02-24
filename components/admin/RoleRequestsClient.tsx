@@ -8,7 +8,7 @@ type Role = "ADMIN" | "PROFESSOR" | "GRAD" | "CONTRIBUTOR" | "USER"
 type Req = {
   id: string
   requestedRole: Role
-  reason: string | null
+  note: string | null
   status: "PENDING" | "APPROVED" | "REJECTED"
   createdAt: string
   user: {
@@ -98,7 +98,7 @@ export default function RoleRequestsClient() {
                   <div className="text-xs text-neutral-400">
                     requested <RoleBadge role={r.requestedRole} /> · {new Date(r.createdAt).toLocaleString()}
                   </div>
-                  {r.reason && <div className="text-sm text-neutral-200 mt-2 whitespace-pre-wrap">{r.reason}</div>}
+                  {r.note && <div className="text-sm text-neutral-200 mt-2 whitespace-pre-wrap">{r.note}</div>}
                 </div>
 
                 {r.status === "PENDING" ? (

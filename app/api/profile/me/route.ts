@@ -7,12 +7,9 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route"
 export async function GET() {
   const session = await getServerSession(authOptions)
   const userId = (session?.user as any)?.id as string | undefined
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
-
-  const user = await prisma.user.findUnique({
+  const me = await prisma.user.findUnique({
     where: { id: userId },
     select: {
       id: true,
@@ -23,25 +20,13 @@ export async function GET() {
         select: {
           displayName: true,
           role: true,
+          createdAt: true,
+          updatedAt: true,
         },
       },
     },
   })
 
-  if (!user) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 })
-  }
-
-  return NextResponse.json(
-    {
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      image: user.image,
-      profile: user.profile
-        ? { displayName: user.profile.displayName, role: user.profile.role }
-        : null,
-    },
-    { status: 200 }
-  )
+  if (!me) return NextResponse.json({ error: "Not found" }, { status: 404 })
+  return NextResponse.json(me, { status: 200 })
 }

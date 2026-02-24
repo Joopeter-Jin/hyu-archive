@@ -1,5 +1,5 @@
 // app/admin/users/page.tsx
-import UsersAdminClient from "@/components/admin/UsersAdminClient"
+import UsersAdminClient from "@/components/admin/AdminUsersClient"
 
 export default function Page() {
   return (

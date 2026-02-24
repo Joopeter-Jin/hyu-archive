@@ -1,4 +1,3 @@
-// components/profile/ProfileTabs.tsx
 "use client"
 
 export type TabKey = "posts" | "comments" | "votes"
@@ -10,39 +9,29 @@ export default function ProfileTabs({
 }: {
   active: TabKey
   onChange: (k: TabKey) => void
-  counts: { posts: number; comments: number; votes: number }
+  counts: { posts: number; comments: number; votes: number; requests?: number }
 }) {
-  const Item = ({
-    k,
-    label,
-    count,
-  }: {
-    k: TabKey
-    label: string
-    count: number
-  }) => {
-    const on = active === k
-    return (
-      <button
-        type="button"
-        onClick={() => onChange(k)}
-        className={
-          "px-3 py-1.5 rounded-lg text-sm border transition " +
-          (on
-            ? "bg-white text-black border-white"
-            : "border-neutral-800 text-neutral-300 hover:bg-neutral-900")
-        }
-      >
-        {label} <span className="text-xs opacity-70">({count})</span>
-      </button>
-    )
-  }
+  const btn = (key: TabKey, label: string, count?: number) => (
+    <button
+      type="button"
+      onClick={() => onChange(key)}
+      className={
+        "text-sm border rounded-lg px-3 py-1.5 transition " +
+        (active === key
+          ? "border-neutral-600 text-white"
+          : "border-neutral-800 text-neutral-300 hover:text-white hover:bg-neutral-900")
+      }
+    >
+      {label} {typeof count === "number" ? `(${count})` : ""}
+    </button>
+  )
 
   return (
     <div className="flex flex-wrap gap-2">
-      <Item k="posts" label="My Posts" count={counts.posts} />
-      <Item k="comments" label="My Comments" count={counts.comments} />
-      <Item k="votes" label="My Votes" count={counts.votes} />
+      {btn("posts", "Posts", counts.posts)}
+      {btn("comments", "Comments", counts.comments)}
+      {btn("votes", "Votes", counts.votes)}
+      
     </div>
   )
 }
