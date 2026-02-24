@@ -1,3 +1,7 @@
+// app/about/page.tsx
+export const dynamic = "force-dynamic"
+export const revalidate = 0
+
 import Link from "next/link"
 import WriteButton from "@/components/WriteButton"
 import { prisma } from "@/lib/prisma"
