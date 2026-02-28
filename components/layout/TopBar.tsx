@@ -10,7 +10,7 @@ export default function TopBar() {
   const { user, loading } = useAuth()
 
   return (
-    <header className="h-16 border-b border-neutral-800 flex items-center justify-end px-6 bg-black">
+    <header className="sticky top-0 z-40 h-16 border-b border-neutral-800 flex items-center justify-end px-6 bg-black">
       {loading ? (
         <div className="text-sm text-neutral-500">Loading...</div>
       ) : user ? (

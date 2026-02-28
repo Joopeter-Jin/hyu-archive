@@ -1,3 +1,4 @@
+// components/layout/Sidebar.tsx
 "use client"
 
 import Link from "next/link"
@@ -16,8 +17,13 @@ export default function Sidebar() {
   const pathname = usePathname()
 
   return (
-    <aside className="w-64 border-r border-neutral-800 p-6 hidden md:block bg-black">
-
+    <aside
+      className="
+        hidden md:block md:w-64
+        md:sticky md:top-0 md:h-screen md:overflow-y-auto
+        border-r border-neutral-800 bg-black p-6
+      "
+    >
       {/* Logo */}
       <Link href="/" className="block mb-10">
         <h1 className="text-xl font-serif font-bold tracking-tight hover:opacity-80 transition">

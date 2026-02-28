@@ -1,4 +1,4 @@
-//app\layout.tsx
+// app/layout.tsx
 import type { Metadata } from "next"
 import { Libre_Baskerville, Inter } from "next/font/google"
 import "./globals.css"
@@ -37,22 +37,20 @@ export default function RootLayout({
       >
         <AuthProvider>
           <div className="flex min-h-screen">
-
+            {/* Desktop Sidebar (sticky는 Sidebar 컴포넌트에서 적용) */}
             <Sidebar />
 
-            <div className="flex-1 flex flex-col">
-
+            <div className="flex-1 flex flex-col min-w-0">
+              {/* TopBar: sticky */}
               <TopBar />
 
-              <div className="flex items-center justify-between h-16 border-b border-neutral-800 px-4 md:hidden">
+              {/* Mobile bar (hamburger row): TopBar 아래에 고정 */}
+              <div className="md:hidden sticky top-16 z-30 bg-black flex items-center justify-between h-16 border-b border-neutral-800 px-4">
                 <MobileSidebar />
               </div>
-              
-              <main className="flex-1 p-8">
-                {children}
-              </main>
-            </div>
 
+              <main className="flex-1 p-8 min-w-0">{children}</main>
+            </div>
           </div>
         </AuthProvider>
       </body>
