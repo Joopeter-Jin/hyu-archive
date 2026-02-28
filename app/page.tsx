@@ -1,31 +1,55 @@
-export default function Page() {
+// app/page.tsx
+import { prisma } from "@/lib/prisma"
+import HomeHero from "@/components/home/HomeHero"
+import CoreQuestions from "@/components/home/CoreQuestions"
+import ArchiveStructure from "@/components/home/ArchiveStructure"
+import LatestPublications from "@/components/home/LatestPublications"
+
+export const dynamic = "force-dynamic"
+
+function makeExcerptFromHtml(html: string, max = 180) {
+  const cleaned = html
+    .replace(/<[^>]*>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+  if (!cleaned) return ""
+  return cleaned.length > max ? cleaned.slice(0, max).trimEnd() + "…" : cleaned
+}
+
+export default async function HomePage() {
+  const latest = await prisma.post.findMany({
+    take: 6,
+    orderBy: { createdAt: "desc" },
+    select: {
+      id: true,
+      title: true,
+      content: true,
+      category: true,
+      createdAt: true,
+    },
+  })
+
+  const posts = latest.map((p) => ({
+    id: p.id,
+    title: p.title,
+    category: p.category,
+    createdAt: p.createdAt,
+    excerpt: makeExcerptFromHtml(p.content),
+  }))
+
   return (
-    <div className="max-w-3xl space-y-12">
-      <section>
-        <h1 className="text-4xl font-serif font-bold tracking-tight">
-          Crypto Philosophy Archive
-        </h1>
-        <p className="mt-6 text-muted-foreground leading-relaxed text-lg">
-          A research platform dedicated to the philosophical,
-          economic, and dialectical foundations of cryptographic systems
-          and decentralized infrastructures.
-        </p>
-      </section>
+    <main className="w-full px-6 py-12 space-y-16 max-w-5xl mx-auto lg:mx-0">
+      {/* Ⅰ. Abstract */}
+      <HomeHero />
 
-      <section>
-        <h2 className="text-xl font-semibold mb-4">
-          Recent Discussions
-        </h2>
+      {/* Ⅱ. Core Questions */}
+      <CoreQuestions />
 
-        <div className="space-y-4">
-          <div className="p-4 border border-border rounded-lg hover:bg-accent transition">
-            The Ontology of Decentralization
-          </div>
-          <div className="p-4 border border-border rounded-lg hover:bg-accent transition">
-            Sovereignty in the Age of Cryptography
-          </div>
-        </div>
-      </section>
-    </div>
+      {/* Ⅲ. Archive Structure */}
+      <ArchiveStructure />
+
+      {/* Ⅳ. Latest Publications */}
+      <LatestPublications posts={posts} />
+    </main>
   )
 }
