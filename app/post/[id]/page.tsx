@@ -36,20 +36,20 @@ export default async function PostPage({
             id: true,
             name: true,
             profile: { select: { displayName: true, role: true } },
+          },
+        },
       },
-    },
-  },
-})
+    })
     .catch(() => null)
 
   if (!post) return notFound()
 
   const isOwner = !!userId && userId === post.authorId
-  const authorName = post.author.profile?.displayName ?? post.author.name ?? "User"
+  const authorName =
+    post.author.profile?.displayName?.trim() ||
+    post.author.name?.trim() ||
+    "User"
   const authorRole = post.author.profile?.role ?? "USER"
-
-  // (선택) 서버 렌더링에서 locale 흔들림 줄이고 싶으면 고정 포맷 사용
-  const createdAtText = new Date(post.createdAt).toISOString().replace("T", " ").slice(0, 16)
 
   return (
     <div className="max-w-4xl mx-auto py-16 px-6 space-y-10">
@@ -58,7 +58,8 @@ export default async function PostPage({
         <div className="flex items-start justify-between gap-4">
           <div className="space-y-2">
             <h1 className="text-4xl font-serif font-bold">{post.title}</h1>
-            <div className="text-sm text-neutral-500 flex items-center gap-2">
+
+            <div className="text-sm text-neutral-500 flex flex-wrap items-center gap-2">
               <span>{new Date(post.createdAt).toLocaleString()}</span>
               <span>·</span>
               <span>{post.category}</span>
@@ -67,6 +68,11 @@ export default async function PostPage({
               <span>·</span>
               <span className="text-neutral-300">{authorName}</span>
               <RoleBadge role={authorRole} />
+            </div>
+
+            {/* ✅ Vote UI (POST) */}
+            <div className="pt-2">
+              <VoteButtons type="POST" targetId={post.id} />
             </div>
           </div>
 

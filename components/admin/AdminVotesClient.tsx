@@ -1,3 +1,4 @@
+//components\admin\AdminVotesClient.tsx
 "use client"
 
 import { useEffect, useState } from "react"
