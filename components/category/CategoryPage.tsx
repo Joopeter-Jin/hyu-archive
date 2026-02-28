@@ -97,12 +97,12 @@ export default async function CategoryPage({
     <div className="py-12 px-6 space-y-10">
       <RefreshOnFocus />
 
-      <div className="flex items-start justify-between gap-6">
+      <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-6">
         <div>
           <h1 className="text-3xl font-serif font-bold">{title}</h1>
           <p className="mt-2 text-neutral-400">{description}</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 md:justify-end">
           <SubscribeToggle category={category} />
           <WriteButton href={`/${category}/write`} />
         </div>  
