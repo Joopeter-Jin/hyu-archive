@@ -6,8 +6,7 @@ import { buildNewPostEmail } from "@/lib/emailTemplates"
 
 export const dynamic = "force-dynamic"
 export const revalidate = 0
-
-const resend = new Resend(process.env.RESEND_API_KEY!)
+export const runtime = "nodejs"
 
 function escapeHtml(s: string) {
   return s
@@ -41,6 +40,7 @@ export async function GET(req: Request) {
   }
 
   const baseUrl = getBaseUrl()
+  const resend = new Resend(process.env.RESEND_API_KEY!)
 
   // ✅ 한번에 너무 많이 보내지 않기
   const jobs = await prisma.notificationJob.findMany({
