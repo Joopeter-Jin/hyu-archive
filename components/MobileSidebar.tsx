@@ -1,6 +1,7 @@
 // components/MobileSidebar.tsx
 "use client"
 
+import { useEffect } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 
@@ -22,16 +23,29 @@ export default function MobileSidebar({
 }) {
   const pathname = usePathname()
 
+  // ✅ Drawer 열릴 때 body 스크롤 잠금
+  useEffect(() => {
+  if (open) {
+    document.body.classList.add("drawer-open")
+  } else {
+    document.body.classList.remove("drawer-open")
+  }
+
+  return () => {
+    document.body.classList.remove("drawer-open")
+  }
+}, [open])
+
   if (!open) return null
 
   return (
-    // ✅ TopBar(h-16) 아래부터만 덮도록 top-16
+    // TopBar(h-16) 아래부터 표시
     <div className="fixed left-0 right-0 bottom-0 top-16 z-50 md:hidden">
-      {/* Overlay (TopBar 아래 영역만) */}
+      {/* Overlay */}
       <div className="absolute inset-0 bg-black/70" onClick={onClose} />
 
-      {/* Panel (TopBar 아래 영역에서 full height) */}
-      <div className="absolute left-0 top-0 h-full w-72 bg-black border-r border-neutral-800 p-6">
+      {/* Panel */}
+      <div className="absolute left-0 top-0 h-full w-72 bg-black border-r border-neutral-800 p-6 overflow-y-auto">
         <div className="mb-10">
           <div className="text-xs tracking-wide text-neutral-500">
             Navigation

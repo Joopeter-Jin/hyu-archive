@@ -104,4 +104,10 @@
   color: rgb(115 115 115);
 }
 
+/* 모바일 Drawer 열릴 때 iOS 스크롤 완전 차단 */
+body.drawer-open {
+  overflow: hidden;
+  touch-action: none;
+}
+
 }
