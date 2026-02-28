@@ -1,10 +1,31 @@
-// app/api/auth/[...nextauth]/route.ts
 import NextAuth, { type NextAuthOptions } from "next-auth"
 import GoogleProvider from "next-auth/providers/google"
 import { PrismaAdapter } from "@next-auth/prisma-adapter"
-import { PrismaClient } from "@prisma/client"
+import { prisma } from "@/lib/prisma"   // ✅ 싱글톤 사용
 
-const prisma = new PrismaClient()
+async function ensureUniqueDisplayName(base: string) {
+  const normalized =
+    base
+      .trim()
+      .replace(/\s+/g, " ")
+      .slice(0, 30) || "Anonymous"
+
+  const exists = await prisma.userProfile.findUnique({
+    where: { displayName: normalized },
+  })
+  if (!exists) return normalized
+
+  for (let i = 2; i <= 50; i++) {
+    const candidate = `${normalized} ${i}`.slice(0, 30)
+    const e = await prisma.userProfile.findUnique({
+      where: { displayName: candidate },
+    })
+    if (!e) return candidate
+  }
+
+  const token = Math.random().toString(36).slice(2, 6)
+  return `${normalized} ${token}`.slice(0, 30)
+}
 
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
@@ -19,20 +40,70 @@ export const authOptions: NextAuthOptions = {
   secret: process.env.NEXTAUTH_SECRET,
 
   session: {
-    // PrismaAdapter면 보통 database 전략이지만,
-    // Vercel/로컬 혼합에서 안정적으로 id를 가져오려면 callbacks로 보강
     strategy: "jwt",
   },
 
   callbacks: {
+    async signIn({ user, account, profile }) {
+      if (account?.provider !== "google") return true
+
+      const userId = (user as any)?.id as string | undefined
+
+      const dbUser =
+        userId
+          ? await prisma.user.findUnique({
+              where: { id: userId },
+              select: { id: true, name: true, email: true },
+            })
+          : user.email
+          ? await prisma.user.findUnique({
+              where: { email: user.email },
+              select: { id: true, name: true, email: true },
+            })
+          : null
+
+      if (!dbUser) return true
+
+      const existingProfile = await prisma.userProfile.findUnique({
+        where: { userId: dbUser.id },
+        select: { displayName: true },
+      })
+
+      const googleName =
+        (profile as any)?.name ||
+        dbUser.name ||
+        user.name ||
+        ""
+
+      if (!existingProfile) {
+        const displayName = await ensureUniqueDisplayName(
+          googleName || "Anonymous"
+        )
+        await prisma.userProfile.create({
+          data: {
+            userId: dbUser.id,
+            displayName,
+          },
+        })
+      } else if (!existingProfile.displayName?.trim()) {
+        const displayName = await ensureUniqueDisplayName(
+          googleName || "Anonymous"
+        )
+        await prisma.userProfile.update({
+          where: { userId: dbUser.id },
+          data: { displayName },
+        })
+      }
+
+      return true
+    },
+
     async jwt({ token, user }) {
-      // ✅ 최초 로그인 시 user.id를 token.sub에 확정
       if (user?.id) token.sub = user.id
       return token
     },
 
     async session({ session, token }) {
-      // ✅ token.sub = NextAuth(User.id)
       if (session.user && token?.sub) {
         ;(session.user as any).id = token.sub
       }
