@@ -1,12 +1,14 @@
-//components/category/CategoryPage.tsx
+// components/category/CategoryPage.tsx
 import Link from "next/link"
 import { prisma } from "@/lib/prisma"
 import WriteButton from "@/components/WriteButton"
 import ListControls from "@/components/category/ListControls"
 import Pagination from "@/components/category/Pagination"
+import RefreshOnFocus from "@/components/category/RefreshOnFocus"
 
 type SearchParams = Record<string, string | string[] | undefined>
 type SortKey = "latest" | "top" | "oldest"
+type SearchScope = "all" | "title"
 
 type Props = {
   category: string
@@ -33,11 +35,12 @@ export default async function CategoryPage({
   const sp = searchParams ?? {}
 
   const q = asString(sp.q).trim()
+  const sort = (asString(sp.sort) || "latest") as SortKey
   const page = asInt(asString(sp.page) || "1", 1)
 
-  const sort = (asString(sp.sort) || "latest") as SortKey
+  const scopeRaw = (asString(sp.scope) || "all") as SearchScope
+  const scope: SearchScope = scopeRaw === "title" ? "title" : "all"
 
-  // perPage는 10/20만 허용
   const perPageRaw = asInt(asString(sp.perPage) || "10", 10)
   const perPage = perPageRaw === 20 ? 20 : 10
 
@@ -47,16 +50,17 @@ export default async function CategoryPage({
   const where = {
     category,
     ...(q
-      ? {
-          OR: [
-            { title: { contains: q, mode: "insensitive" as const } },
-            { content: { contains: q, mode: "insensitive" as const } },
-          ],
-        }
+      ? scope === "title"
+        ? { title: { contains: q, mode: "insensitive" as const } }
+        : {
+            OR: [
+              { title: { contains: q, mode: "insensitive" as const } },
+              { content: { contains: q, mode: "insensitive" as const } },
+            ],
+          }
       : {}),
   }
 
-  // ✅ 정렬 반영 (top은 다음 단계에서 vote 집계로 구현)
   const orderBy =
     sort === "oldest"
       ? ({ createdAt: "asc" } as const)
@@ -78,7 +82,7 @@ export default async function CategoryPage({
           },
         },
       },
-      // ✅ 여기 핵심
+      // top은 다음 단계에서 vote 집계로 구현할 거라 일단 최신순 fallback
       orderBy: sort === "top" ? ({ createdAt: "desc" } as const) : orderBy,
       skip,
       take,
@@ -90,6 +94,8 @@ export default async function CategoryPage({
 
   return (
     <div className="py-12 px-6 space-y-10">
+      <RefreshOnFocus />
+
       <div className="flex items-start justify-between gap-6">
         <div>
           <h1 className="text-3xl font-serif font-bold">{title}</h1>
@@ -100,6 +106,10 @@ export default async function CategoryPage({
 
       <ListControls />
 
+      <div className="text-xs text-neutral-500">
+        debug: q="{q}" scope="{scope}" sort="{sort}" page={page} perPage={perPage} total={total}
+      </div>
+
       <div className="space-y-3">
         {posts.length ? (
           posts.map((post) => {
@@ -108,18 +118,19 @@ export default async function CategoryPage({
               post.author.name?.trim() ||
               "Unknown"
 
+            const date = new Date(post.createdAt).toISOString().slice(0, 10)
+
             return (
-              <Link key={post.id} href={`/post/${post.id}`}>
+              <Link key={post.id} href={`/post/${post.id}`} prefetch={false}>
                 <div className="p-4 border border-neutral-800 rounded-lg hover:bg-neutral-900 transition cursor-pointer">
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0">
                       <div className="font-medium truncate">{post.title}</div>
-                      <div className="mt-1 text-xs text-neutral-500">
-                        {new Date(post.createdAt).toISOString().slice(0, 10)}
-                      </div>
                     </div>
 
                     <div className="flex shrink-0 items-center gap-3 text-xs text-neutral-400">
+                      <div className="text-neutral-500">{date}</div>
+                      <div className="text-neutral-600">·</div>
                       <div className="max-w-[160px] truncate">{displayName}</div>
                       <div className="text-neutral-600">·</div>
                       <div>{post.views} views</div>
