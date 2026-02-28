@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/notifications?key=YOUR_SECRET",
+      "schedule": "*/5 * * * *"
+    }
+  ]
+}

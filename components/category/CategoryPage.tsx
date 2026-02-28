@@ -5,6 +5,7 @@ import WriteButton from "@/components/WriteButton"
 import ListControls from "@/components/category/ListControls"
 import Pagination from "@/components/category/Pagination"
 import RefreshOnFocus from "@/components/category/RefreshOnFocus"
+import SubscribeToggle from "@/components/category/SubscribeToggle"
 
 type SearchParams = Record<string, string | string[] | undefined>
 type SortKey = "latest" | "top" | "oldest"
@@ -101,7 +102,10 @@ export default async function CategoryPage({
           <h1 className="text-3xl font-serif font-bold">{title}</h1>
           <p className="mt-2 text-neutral-400">{description}</p>
         </div>
-        <WriteButton href={`/${category}/write`} />
+        <div className="flex items-center gap-2">
+          <SubscribeToggle category={category} />
+          <WriteButton href={`/${category}/write`} />
+        </div>  
       </div>
 
       <ListControls />
