@@ -1,7 +1,6 @@
-//components\MobileSidebar.tsx
+// components/MobileSidebar.tsx
 "use client"
 
-import { useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 
@@ -14,63 +13,54 @@ const menuItems = [
   { name: "News & Interpretation", href: "/news" },
 ]
 
-export default function MobileSidebar() {
-  const [open, setOpen] = useState(false)
+export default function MobileSidebar({
+  open,
+  onClose,
+}: {
+  open: boolean
+  onClose: () => void
+}) {
   const pathname = usePathname()
 
+  if (!open) return null
+
   return (
-    <>
-      {/* Hamburger Button */}
-      <button
-        onClick={() => setOpen(true)}
-        className="md:hidden p-4 text-neutral-400 hover:text-white"
-      >
-        ☰
-      </button>
+    // ✅ TopBar(h-16) 아래부터만 덮도록 top-16
+    <div className="fixed left-0 right-0 bottom-0 top-16 z-50 md:hidden">
+      {/* Overlay (TopBar 아래 영역만) */}
+      <div className="absolute inset-0 bg-black/70" onClick={onClose} />
 
-      {/* Drawer */}
-      {open && (
-        <div className="fixed inset-0 z-50 flex">
-
-          {/* Overlay */}
-          <div
-            className="fixed inset-0 bg-black/70"
-            onClick={() => setOpen(false)}
-          />
-
-          {/* Sidebar Panel */}
-          <div className="relative w-64 bg-black border-r border-neutral-800 p-6">
-            <button
-              onClick={() => setOpen(false)}
-              className="mb-8 text-neutral-400 hover:text-white"
-            >
-              ✕
-            </button>
-
-            <nav className="space-y-4">
-              {menuItems.map((item) => {
-                const isActive = pathname === item.href
-
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    onClick={() => setOpen(false)}
-                    className={`block ${
-                      isActive
-                        ? "text-white font-semibold"
-                        : "text-neutral-400 hover:text-white"
-                    }`}
-                  >
-                    {item.name}
-                  </Link>
-                )
-              })}
-            </nav>
+      {/* Panel (TopBar 아래 영역에서 full height) */}
+      <div className="absolute left-0 top-0 h-full w-72 bg-black border-r border-neutral-800 p-6">
+        <div className="mb-10">
+          <div className="text-xs tracking-wide text-neutral-500">
+            Navigation
           </div>
-
+          <div className="mt-2 text-lg font-serif font-bold">
+            Crypto Philosophy Archive
+          </div>
         </div>
-      )}
-    </>
+
+        <nav className="space-y-4">
+          {menuItems.map((item) => {
+            const isActive = pathname === item.href
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={onClose}
+                className={`block transition-colors ${
+                  isActive
+                    ? "text-white font-semibold"
+                    : "text-neutral-400 hover:text-white"
+                }`}
+              >
+                {item.name}
+              </Link>
+            )
+          })}
+        </nav>
+      </div>
+    </div>
   )
 }
