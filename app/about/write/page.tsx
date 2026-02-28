@@ -1,3 +1,4 @@
+//app\about\write\page.tsx
 import { Suspense } from "react"
 import WriteClient from "./WriteClient"
 

@@ -10,25 +10,28 @@ export async function GET(_req: Request, ctx: Ctx) {
   const { id } = await ctx.params
 
   const post = await prisma.post.findUnique({
-    where: { id },
-    select: {
-      id: true,
-      title: true,
-      content: true,
-      category: true,
-      createdAt: true,
-      authorId: true,
-      views: true,
-      author: {
-        select: {
-          id: true,
-          name: true,
-          profile: { select: { displayName: true, role: true } },
-        },
+  where: { id },
+  select: {
+    id: true,
+    title: true,
+    content: true,
+    category: true,
+    createdAt: true,
+    authorId: true,
+    views: true,
+    author: {
+      select: {
+        id: true,
+        name: true,
+        profile: { select: { displayName: true, role: true } },
       },
     },
-  }  
-)  
+    attachments: {
+      select: { url: true, fileName: true, mimeType: true, size: true },
+      orderBy: { createdAt: "desc" },
+    },
+  },
+})  
 
   if (!post) return NextResponse.json({ error: "Not found" }, { status: 404 })
   return NextResponse.json(post, { status: 200 })

@@ -36,6 +36,12 @@ enum RoleRequestStatus {
   REJECTED
 }
 
+// ✅ 알림 채널 (RSS 자체는 저장 필요 없지만, 메일/문자 알림은 필요)
+enum NotifyChannel {
+  EMAIL
+  SMS
+}
+
 //////////////////////////////////////////////////
 // NextAuth models (기존 유지 + relations 추가)
 //////////////////////////////////////////////////
@@ -60,6 +66,8 @@ model User {
 
   roleRequests         RoleRequest[] @relation("RoleRequestRequester")
   reviewedRoleRequests RoleRequest[] @relation("RoleRequestReviewer")
+
+  subscriptions Subscription[]
 }
 
 model Account {
@@ -116,7 +124,7 @@ model UserProfile {
 }
 
 //////////////////////////////////////////////////
-// Posts (기존 유지 + votes/comments 연결)
+// Posts (기존 유지 + votes/comments + attachments 연결)
 //////////////////////////////////////////////////
 
 model Post {
@@ -135,7 +143,30 @@ model Post {
   comments Comment[]
   votes    Vote[]    @relation("PostVotes")
 
+  attachments Attachment[]
+  notificationJobs NotificationJob[]
+
   @@map("posts")
+}
+
+//////////////////////////////////////////////////
+// Attachments (Post 첨부파일)
+//////////////////////////////////////////////////
+
+model Attachment {
+  id        String   @id @default(uuid()) @db.Uuid
+  postId    String   @db.Uuid @map("post_id")
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  url       String
+  fileName  String   @map("file_name")
+  mimeType  String   @default("application/octet-stream") @map("mime_type")
+  size      Int      @default(0)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([postId])
+  @@map("attachments")
 }
 
 //////////////////////////////////////////////////
@@ -175,7 +206,6 @@ model Comment {
 model Vote {
   id String @id @default(uuid()) @db.Uuid
 
-  // ✅ polymorphic을 FK 두 개로 분리
   postId    String? @map("post_id") @db.Uuid
   commentId String? @map("comment_id") @db.Uuid
 
@@ -189,7 +219,6 @@ model Vote {
 
   createdAt DateTime @default(now()) @map("created_at")
 
-  // ✅ 같은 유저는 같은 글에 1번만 투표
   @@unique([userId, postId])
   @@unique([userId, commentId])
   @@index([postId])
@@ -197,10 +226,13 @@ model Vote {
   @@map("votes")
 }
 
+//////////////////////////////////////////////////
+// Role requests
+//////////////////////////////////////////////////
+
 model RoleRequest {
   id     String @id @default(uuid()) @db.Uuid
 
-  // 요청자
   userId String @map("user_id")
   user   User   @relation("RoleRequestRequester", fields: [userId], references: [id], onDelete: Cascade)
 
@@ -212,7 +244,6 @@ model RoleRequest {
 
   decidedAt DateTime? @map("decided_at")
 
-  // 리뷰어(관리자)
   decidedBy String? @map("decided_by")
   reviewer  User?   @relation("RoleRequestReviewer", fields: [decidedBy], references: [id], onDelete: SetNull)
 
@@ -223,4 +254,61 @@ model RoleRequest {
   @@index([status])
   @@index([decidedBy])
   @@map("role_requests")
+}
+
+//////////////////////////////////////////////////
+// Subscriptions (메일/문자 알림 구독)
+//////////////////////////////////////////////////
+
+model Subscription {
+  id        String              @id @default(uuid()) @db.Uuid
+  userId    String
+  user      User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // 어떤 카테고리를 구독하는지
+  category  String
+
+  // 지금은 EMAIL만
+  channel   NotificationChannel @default(EMAIL)
+
+  // 구독 on/off
+  active    Boolean             @default(true)
+
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+
+  @@unique([userId, category, channel])
+  @@index([category, active])
+  @@map("subscriptions")
+}
+
+//////////////////////////////////////////////////
+// Notification Jobs (발송 큐)
+//////////////////////////////////////////////////
+
+enum NotificationChannel {
+  EMAIL
+}
+
+enum NotificationDestination {
+  SUBSCRIBERS
+}
+
+model NotificationJob {
+  id        String   @id @default(uuid()) @db.Uuid
+
+  postId    String   @db.Uuid
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  category  String
+
+  channel   NotificationChannel @default(EMAIL)
+  processed Boolean             @default(false)
+
+  createdAt DateTime            @default(now()) @map("created_at")
+  processedAt DateTime?         @map("processed_at")
+
+  @@index([processed, createdAt])
+  @@index([postId])
+  @@map("notification_jobs")
 }

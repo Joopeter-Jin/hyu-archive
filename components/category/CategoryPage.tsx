@@ -106,10 +106,6 @@ export default async function CategoryPage({
 
       <ListControls />
 
-      <div className="text-xs text-neutral-500">
-        debug: q="{q}" scope="{scope}" sort="{sort}" page={page} perPage={perPage} total={total}
-      </div>
-
       <div className="space-y-3">
         {posts.length ? (
           posts.map((post) => {
