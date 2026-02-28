@@ -7,6 +7,7 @@ import PostActions from "@/components/PostActions"
 import Comments from "@/components/comments/Comments"
 import VoteButtons from "@/components/votes/VoteButtons"
 import RoleBadge from "@/components/profile/RoleBadge"
+import ViewIncrement from "@/components/views/ViewIncrement"
 
 export default async function PostPage({
   params,
@@ -18,29 +19,26 @@ export default async function PostPage({
   const session = await getServerSession(authOptions)
   const userId = (session?.user as any)?.id as string | undefined
 
-  // ✅ 조회수 1 증가 + 포스트 읽기
-  const post = await prisma.post
-    .update({
-      where: { id },
-      data: { views: { increment: 1 } },
-      select: {
-        id: true,
-        title: true,
-        content: true,
-        category: true,
-        createdAt: true,
-        authorId: true,
-        views: true,
-        author: {
-          select: {
-            id: true,
-            name: true,
-            profile: { select: { displayName: true, role: true } },
-          },
+  // ✅ (변경) update 대신 findUnique로 "읽기"만 함 (페이지 로딩 빨라짐)
+  const post = await prisma.post.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      title: true,
+      content: true,
+      category: true,
+      createdAt: true,
+      authorId: true,
+      views: true,
+      author: {
+        select: {
+          id: true,
+          name: true,
+          profile: { select: { displayName: true, role: true } },
         },
       },
-    })
-    .catch(() => null)
+    },
+  })
 
   if (!post) return notFound()
 
@@ -53,6 +51,12 @@ export default async function PostPage({
 
   return (
     <div className="max-w-4xl mx-auto py-16 px-6 space-y-10">
+      {/* ✅✅✅ 여기가 정확한 위치!
+          페이지가 렌더되자마자 클라이언트에서 조회수 증가 요청을 보냄
+          (본문/헤더 UI 렌더링과 독립적으로 동작해서 빨라짐)
+      */}
+      <ViewIncrement postId={post.id} />
+
       {/* Header */}
       <header className="space-y-2">
         <div className="flex items-start justify-between gap-4">

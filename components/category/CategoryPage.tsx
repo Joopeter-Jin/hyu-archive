@@ -121,7 +121,7 @@ export default async function CategoryPage({
             const date = new Date(post.createdAt).toISOString().slice(0, 10)
 
             return (
-              <Link key={post.id} href={`/post/${post.id}`} prefetch={false}>
+              <Link key={post.id} href={`/post/${post.id}`}>
                 <div className="p-4 border border-neutral-800 rounded-lg hover:bg-neutral-900 transition cursor-pointer">
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0">
