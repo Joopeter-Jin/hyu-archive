@@ -2,8 +2,9 @@
 "use client"
 
 import Link from "next/link"
-import { signIn, signOut } from "next-auth/react"
+import { signOut, signIn } from "next-auth/react"
 import { useAuth } from "@/context/AuthContext"
+import InAppLoginGuard from "@/components/auth/InAppLoginGuard"
 
 export default function TopBar() {
   const { user, loading } = useAuth()
@@ -31,12 +32,16 @@ export default function TopBar() {
           </button>
         </div>
       ) : (
-        <button
-          onClick={() => signIn("google")}
-          className="text-sm text-neutral-400 hover:text-white transition"
-        >
-          Login
-        </button>
+        <InAppLoginGuard
+          onContinue={() => {
+            const callbackUrl =
+              typeof window !== "undefined"
+                ? new URL(window.location.href).toString()
+                : "/"
+
+            signIn("google", { callbackUrl })
+          }}
+        />
       )}
     </header>
   )

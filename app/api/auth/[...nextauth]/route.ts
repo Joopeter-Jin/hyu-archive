@@ -1,7 +1,8 @@
+// app/api/auth/[...nextauth]/route.ts
 import NextAuth, { type NextAuthOptions } from "next-auth"
 import GoogleProvider from "next-auth/providers/google"
 import { PrismaAdapter } from "@next-auth/prisma-adapter"
-import { prisma } from "@/lib/prisma"   // ✅ 싱글톤 사용
+import { prisma } from "@/lib/prisma" // ✅ 싱글톤 사용
 
 async function ensureUniqueDisplayName(base: string) {
   const normalized =
@@ -70,10 +71,7 @@ export const authOptions: NextAuthOptions = {
       })
 
       const googleName =
-        (profile as any)?.name ||
-        dbUser.name ||
-        user.name ||
-        ""
+        (profile as any)?.name || dbUser.name || user.name || ""
 
       if (!existingProfile) {
         const displayName = await ensureUniqueDisplayName(
@@ -99,7 +97,7 @@ export const authOptions: NextAuthOptions = {
     },
 
     async jwt({ token, user }) {
-      if (user?.id) token.sub = user.id
+      if ((user as any)?.id) token.sub = (user as any).id
       return token
     },
 
@@ -108,6 +106,13 @@ export const authOptions: NextAuthOptions = {
         ;(session.user as any).id = token.sub
       }
       return session
+    },
+
+    // ✅ 추가: callbackUrl 안전하게 처리(동일 도메인만 허용)
+    async redirect({ url, baseUrl }) {
+      if (url.startsWith(baseUrl)) return url
+      if (url.startsWith("/")) return `${baseUrl}${url}`
+      return baseUrl
     },
   },
 }
