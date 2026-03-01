@@ -4,6 +4,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { useSession, signIn } from "next-auth/react"
 import VoteButtons from "@/components/votes/VoteButtons"
+import Link from "next/link"
 
 type Role = "ADMIN" | "PROFESSOR" | "GRAD" | "CONTRIBUTOR" | "USER"
 
@@ -200,7 +201,12 @@ function CommentItem({
       <div className="rounded-xl border border-neutral-900 bg-black/30 p-4">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <div className="text-sm text-white">{displayName}</div>
+            <Link
+              href={`/u/${node.authorId}`}
+              className="text-sm text-white hover:underline"
+            >
+              {displayName}
+            </Link>
             <div className="text-xs text-neutral-500">
               {roleLabel(role)} · {new Date(node.createdAt).toLocaleString()}
             </div>

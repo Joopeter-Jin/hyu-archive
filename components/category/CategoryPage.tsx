@@ -68,27 +68,28 @@ export default async function CategoryPage({
       : ({ createdAt: "desc" } as const)
 
   const [total, posts] = await Promise.all([
-    prisma.post.count({ where }),
-    prisma.post.findMany({
-      where,
-      select: {
-        id: true,
-        title: true,
-        createdAt: true,
-        views: true,
-        author: {
-          select: {
-            name: true,
-            profile: { select: { displayName: true } },
-          },
+  prisma.post.count({ where }),
+  prisma.post.findMany({
+    where,
+    select: {
+      id: true,
+      title: true,
+      createdAt: true,
+      views: true,
+      authorId: true,
+      author: {
+        select: {
+          id: true,
+          name: true,
+          profile: { select: { displayName: true } },
         },
       },
-      // top은 다음 단계에서 vote 집계로 구현할 거라 일단 최신순 fallback
-      orderBy: sort === "top" ? ({ createdAt: "desc" } as const) : orderBy,
-      skip,
-      take,
-    }),
-  ])
+    },
+    orderBy: sort === "top" ? ({ createdAt: "desc" } as const) : orderBy,
+    skip,
+    take,
+  }),
+])
 
   const totalPages = Math.max(1, Math.ceil(total / perPage))
   const safePage = Math.min(page, totalPages)
@@ -121,23 +122,35 @@ export default async function CategoryPage({
             const date = new Date(post.createdAt).toISOString().slice(0, 10)
 
             return (
-              <Link key={post.id} href={`/post/${post.id}`}>
-                <div className="p-4 border border-neutral-800 rounded-lg hover:bg-neutral-900 transition cursor-pointer">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="min-w-0">
-                      <div className="font-medium truncate">{post.title}</div>
-                    </div>
+              <div
+                key={post.id}
+                className="p-4 border border-neutral-800 rounded-lg hover:bg-neutral-900 transition"
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    {/* ✅ 제목만 글 링크 */}
+                    <Link href={`/post/${post.id}`} className="font-medium truncate hover:underline">
+                      {post.title}
+                    </Link>
+                  </div>
 
-                    <div className="flex shrink-0 items-center gap-3 text-xs text-neutral-400">
-                      <div className="text-neutral-500">{date}</div>
-                      <div className="text-neutral-600">·</div>
-                      <div className="max-w-[160px] truncate">{displayName}</div>
-                      <div className="text-neutral-600">·</div>
-                      <div>{post.views} views</div>
-                    </div>
+                  <div className="flex shrink-0 items-center gap-3 text-xs text-neutral-400">
+                    <div className="text-neutral-500">{date}</div>
+                    <div className="text-neutral-600">·</div>
+
+                    {/* ✅ 작성자만 유저 링크 (onClick 필요 없음) */}
+                    <Link
+                      href={`/u/${post.author.id}`}
+                      className="max-w-[160px] truncate hover:underline"
+                    >
+                      {displayName}
+                    </Link>
+
+                    <div className="text-neutral-600">·</div>
+                    <div>{post.views} views</div>
                   </div>
                 </div>
-              </Link>
+              </div>
             )
           })
         ) : (

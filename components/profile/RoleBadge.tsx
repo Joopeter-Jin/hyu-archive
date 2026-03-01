@@ -1,3 +1,4 @@
+//components\profile\RoleBadge.tsx
 export default function RoleBadge({
   role,
 }: {
