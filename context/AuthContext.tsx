@@ -134,9 +134,5 @@ function AuthProviderInner({ children }: { children: React.ReactNode }) {
 }
 
 export function useAuth() {
-  const { data: session, status } = useSession()
-  return {
-    user: session?.user ?? null,
-    loading: status === "loading",
-  }
+  return useContext(AuthContext)
 }

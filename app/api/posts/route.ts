@@ -1,8 +1,7 @@
 // app/api/posts/route.ts
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/app/api/auth/[...nextauth]/route"
+import { getMeWithRole, canManageCategory } from "@/lib/acl"
 
 type AttachmentDTO = {
   url: string
@@ -47,7 +46,6 @@ export async function GET(req: Request) {
           profile: { select: { displayName: true, role: true } },
         },
       },
-      // ✅ 목록에서도 첨부 존재 여부 정도는 알 수 있게(원하면 제거 가능)
       attachments: { select: { id: true } },
     },
   })
@@ -57,25 +55,9 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
-    const session = await getServerSession(authOptions)
-
-    // ✅ email로 DB user 확정 (FK 안전)
-    const email = session?.user?.email ?? null
-    if (!email) {
-      return NextResponse.json({ error: "Unauthorized (no email)" }, { status: 401 })
-    }
-
-    const dbUser = await prisma.user.findUnique({
-      where: { email },
-      select: { id: true },
-    })
-    if (!dbUser?.id) {
-      return NextResponse.json(
-        { error: "Unauthorized (user not found in DB)" },
-        { status: 401 }
-      )
-    }
-    const userId = dbUser.id
+    // ✅ 로그인 + role
+    const me = await getMeWithRole()
+    if (!me) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
     const body = await req.json().catch(() => ({} as any))
     const title = asString(body.title).trim()
@@ -84,6 +66,11 @@ export async function POST(req: Request) {
 
     if (!title) return NextResponse.json({ error: "Title is required" }, { status: 400 })
     if (!category) return NextResponse.json({ error: "Category is required" }, { status: 400 })
+
+    // ✅ 카테고리 권한 체크 (작성/수정/삭제 동일)
+    if (!canManageCategory(me.role, category)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    }
 
     const rawAttachments = Array.isArray(body.attachments) ? body.attachments : []
     const attachments: AttachmentDTO[] = rawAttachments
@@ -95,10 +82,9 @@ export async function POST(req: Request) {
         size: typeof a.size === "number" && Number.isFinite(a.size) ? a.size : 0,
       }))
 
-    // ✅ 글 + 첨부 + job enqueue를 트랜잭션으로 묶으면 더 안전
     const created = await prisma.$transaction(async (tx) => {
       const post = await tx.post.create({
-        data: { title, content, category, authorId: userId },
+        data: { title, content, category, authorId: me.id },
         select: { id: true, category: true },
       })
 
@@ -114,7 +100,6 @@ export async function POST(req: Request) {
         })
       }
 
-      // ✅ 구독자가 있으면 job enqueue (단순화: postId만)
       const subCount = await tx.subscription.count({
         where: { category: post.category, active: true, channel: "EMAIL" },
       })

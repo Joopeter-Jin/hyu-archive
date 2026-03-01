@@ -105,7 +105,7 @@ export default async function CategoryPage({
         </div>
         <div className="flex items-center gap-2 md:justify-end">
           <SubscribeToggle category={category} />
-          <WriteButton href={`/${category}/write`} />
+          <WriteButton href={`/${category}/write`} category={category} />
         </div>  
       </div>
 
