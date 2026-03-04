@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/notifications?key=YOUR_SECRET",
       "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/cron/scores?key=YOUR_CRON_SECRET",
+      "schedule": "10 9 * * *"
     }
   ]
 }

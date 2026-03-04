@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react"
 import { useSession, signIn } from "next-auth/react"
 import VoteButtons from "@/components/votes/VoteButtons"
 import Link from "next/link"
+import RoleBadge from "@/components/profile/RoleBadge"
 
 type Role = "ADMIN" | "PROFESSOR" | "GRAD" | "CONTRIBUTOR" | "USER"
 
@@ -22,7 +23,11 @@ type CommentNode = {
     id: string
     name: string | null
     image: string | null
-    profile: { displayName: string; role: Role } | null
+    profile: {
+      displayName: string
+      role: Role
+      contributorLevel: number
+    } | null
   }
   replies: CommentNode[]
 }
@@ -121,6 +126,7 @@ export default function Comments({ postId }: { postId: string }) {
 
       {error && <div className="mt-3 text-sm text-red-400">{error}</div>}
 
+      {/* ✅ 댓글 작성 박스 (원래 있던 거 유지) */}
       <div className="mt-4 rounded-xl border border-neutral-800 bg-neutral-950 p-4">
         {status !== "authenticated" ? (
           <div className="flex items-center justify-between gap-3">
@@ -187,10 +193,18 @@ function CommentItem({
   onReply,
   onDelete,
   depth,
-}: any) {
+}: {
+  node: CommentNode
+  myId: string | undefined
+  canReply: boolean
+  onReply: (content: string, parentId: string | null) => Promise<void>
+  onDelete: (id: string) => Promise<void>
+  depth: number
+}) {
   const displayName = node.author.profile?.displayName ?? node.author.name ?? "Anonymous"
   const role = node.author.profile?.role ?? "USER"
-  const mine = myId && node.authorId === myId
+  const level = node.author.profile?.contributorLevel ?? 0
+  const mine = !!myId && node.authorId === myId
 
   const [replyOpen, setReplyOpen] = useState(false)
   const [replyText, setReplyText] = useState("")
@@ -201,12 +215,15 @@ function CommentItem({
       <div className="rounded-xl border border-neutral-900 bg-black/30 p-4">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <Link
-              href={`/u/${node.authorId}`}
-              className="text-sm text-white hover:underline"
-            >
-              {displayName}
-            </Link>
+            {/* ✅ 유저명 + 배지(레벨 포함) */}
+            <div className="flex items-center gap-2">
+              <Link href={`/u/${node.authorId}`} className="text-sm text-white hover:underline">
+                {displayName}
+              </Link>
+              <RoleBadge role={role} contributorLevel={level} />
+            </div>
+
+            {/* ✅ 기존 roleLabel + 날짜 라인 유지 */}
             <div className="text-xs text-neutral-500">
               {roleLabel(role)} · {new Date(node.createdAt).toLocaleString()}
             </div>
@@ -252,6 +269,7 @@ function CommentItem({
           )}
         </div>
 
+        {/* ✅ 대댓글 작성 UI (원래 있던 거 유지) */}
         {replyOpen && canReply && (
           <div className="mt-3 space-y-2">
             <textarea
@@ -271,7 +289,7 @@ function CommentItem({
                 Cancel
               </button>
               <button
-                className="px-3 py-1.5 rounded-lg bg-white text-black text-sm"
+                className="px-3 py-1.5 rounded-lg bg-white text-black text-sm disabled:opacity-50"
                 disabled={!replyText.trim()}
                 onClick={async () => {
                   const txt = replyText
@@ -289,7 +307,7 @@ function CommentItem({
 
       {node.replies?.length > 0 && (
         <div className="space-y-3">
-          {node.replies.map((r: any) => (
+          {node.replies.map((r) => (
             <CommentItem
               key={r.id}
               node={r}

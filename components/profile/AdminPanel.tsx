@@ -7,8 +7,17 @@ import AdminUsersClient from "@/components/admin/AdminUsersClient"
 import AdminPostsClient from "@/components/admin/AdminPostsClient"
 import AdminCommentsClient from "@/components/admin/AdminCommentsClient"
 import AdminVotesClient from "@/components/admin/AdminVotesClient"
+import AdminArchivePicksClient from "@/components/admin/AdminArchivePicksClient"
+import AdminScoresClient from "@/components/admin/AdminScoresClient"
 
-type Tab = "roleRequests" | "users" | "posts" | "comments" | "votes"
+type Tab =
+  | "roleRequests"
+  | "users"
+  | "posts"
+  | "comments"
+  | "votes"
+  | "archivePicks"
+  | "scores"
 
 export default function AdminPanel() {
   const [tab, setTab] = useState<Tab>("roleRequests")
@@ -32,7 +41,9 @@ export default function AdminPanel() {
     <div className="rounded-2xl border border-neutral-800 bg-neutral-950 p-6 space-y-4">
       <div>
         <div className="text-lg font-semibold">Admin</div>
-        <div className="text-sm text-neutral-400">Manage users, posts, comments, votes, and role requests.</div>
+        <div className="text-sm text-neutral-400">
+          Manage users, posts, comments, votes, role requests, archive picks, and scoring.
+        </div>
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -41,6 +52,8 @@ export default function AdminPanel() {
         <TabBtn k="posts" label="Posts" />
         <TabBtn k="comments" label="Comments" />
         <TabBtn k="votes" label="Votes" />
+        <TabBtn k="archivePicks" label="Archive Picks" />
+        <TabBtn k="scores" label="Scores" />
       </div>
 
       <div className="pt-2">
@@ -49,6 +62,8 @@ export default function AdminPanel() {
         {tab === "posts" && <AdminPostsClient />}
         {tab === "comments" && <AdminCommentsClient />}
         {tab === "votes" && <AdminVotesClient />}
+        {tab === "archivePicks" && <AdminArchivePicksClient />}
+        {tab === "scores" && <AdminScoresClient />}
       </div>
     </div>
   )

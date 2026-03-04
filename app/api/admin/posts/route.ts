@@ -5,26 +5,25 @@ import { requireAdmin } from "@/lib/authz"
 
 export async function GET(req: Request) {
   const auth = await requireAdmin()
-  if (!auth.ok) return NextResponse.json({ error: "Forbidden" }, { status: auth.status })
+  if (!auth.ok) return auth.res
 
   const { searchParams } = new URL(req.url)
   const q = (searchParams.get("q") ?? "").trim()
-  const category = (searchParams.get("category") ?? "").trim() || undefined
 
-  const posts = await prisma.post.findMany({
-    where: {
-      ...(category ? { category } : {}),
-      ...(q
-        ? {
-            OR: [
-              { title: { contains: q, mode: "insensitive" } },
-              { content: { contains: q, mode: "insensitive" } },
-              { author: { profile: { displayName: { contains: q, mode: "insensitive" } } } },
-              { author: { email: { contains: q, mode: "insensitive" } } },
-            ],
-          }
-        : {}),
-    },
+  const where =
+    q.length > 0
+      ? {
+          OR: [
+            { id: { contains: q, mode: "insensitive" as const } },
+            { title: { contains: q, mode: "insensitive" as const } },
+            { category: { contains: q, mode: "insensitive" as const } },
+            { authorId: { contains: q, mode: "insensitive" as const } },
+          ],
+        }
+      : undefined
+
+  const list = await prisma.post.findMany({
+    where,
     orderBy: { createdAt: "desc" },
     take: 200,
     select: {
@@ -32,19 +31,19 @@ export async function GET(req: Request) {
       title: true,
       category: true,
       createdAt: true,
+      updatedAt: true,
       views: true,
       authorId: true,
       author: {
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          profile: { select: { displayName: true, role: true } },
-        },
+        select: { id: true, name: true, profile: { select: { displayName: true, role: true } } },
       },
-      _count: { select: { comments: true, votes: true } },
+
+      // ✅ relation name: archivePick (단수)
+      archivePick: {
+        select: { id: true, active: true, createdAt: true, adminId: true, note: true },
+      },
     },
   })
 
-  return NextResponse.json(posts, { status: 200 })
+  return NextResponse.json(list, { status: 200 })
 }

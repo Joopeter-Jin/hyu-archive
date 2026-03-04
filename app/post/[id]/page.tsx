@@ -5,9 +5,9 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/app/api/auth/[...nextauth]/route"
 import PostActions from "@/components/PostActions"
 import Comments from "@/components/comments/Comments"
-import VoteButtons from "@/components/votes/VoteButtons"
 import RoleBadge from "@/components/profile/RoleBadge"
 import ViewIncrement from "@/components/views/ViewIncrement"
+import PostEngagementBar from "@/components/post/PostEngagementBar"
 
 export default async function PostPage({
   params,
@@ -19,7 +19,6 @@ export default async function PostPage({
   const session = await getServerSession(authOptions)
   const userId = (session?.user as any)?.id as string | undefined
 
-  // ✅ (변경) update 대신 findUnique로 "읽기"만 함 (페이지 로딩 빨라짐)
   const post = await prisma.post.findUnique({
     where: { id },
     select: {
@@ -34,7 +33,7 @@ export default async function PostPage({
         select: {
           id: true,
           name: true,
-          profile: { select: { displayName: true, role: true } },
+          profile: { select: { displayName: true, role: true, contributorLevel: true } },
         },
       },
     },
@@ -48,16 +47,12 @@ export default async function PostPage({
     post.author.name?.trim() ||
     "User"
   const authorRole = post.author.profile?.role ?? "USER"
+  const authorLevel = post.author.profile?.contributorLevel ?? 0
 
   return (
     <div className="max-w-4xl mx-auto py-16 px-6 space-y-10">
-      {/* ✅✅✅ 여기가 정확한 위치!
-          페이지가 렌더되자마자 클라이언트에서 조회수 증가 요청을 보냄
-          (본문/헤더 UI 렌더링과 독립적으로 동작해서 빨라짐)
-      */}
       <ViewIncrement postId={post.id} />
 
-      {/* Header */}
       <header className="space-y-2">
         <div className="flex items-start justify-between gap-4">
           <div className="space-y-2">
@@ -71,16 +66,10 @@ export default async function PostPage({
               <span>views {post.views}</span>
               <span>·</span>
               <span className="text-neutral-300">{authorName}</span>
-              <RoleBadge role={authorRole} />
-            </div>
-
-            {/* ✅ Vote UI (POST) */}
-            <div className="pt-2">
-              <VoteButtons type="POST" targetId={post.id} />
+              <RoleBadge role={authorRole} contributorLevel={authorLevel} />
             </div>
           </div>
 
-          {/* ✅ 작성자만 보이는 액션 */}
           {isOwner ? (
             <PostActions postId={post.id} category={post.category} />
           ) : (
@@ -89,13 +78,14 @@ export default async function PostPage({
         </div>
       </header>
 
-      {/* Body */}
       <article
         className="prose prose-invert max-w-none"
         dangerouslySetInnerHTML={{ __html: post.content }}
       />
 
-      {/* ✅ Comments */}
+      {/* ✅✅ 글 하단 Engagement Bar */}
+      <PostEngagementBar postId={post.id} />
+
       <Comments postId={post.id} />
     </div>
   )

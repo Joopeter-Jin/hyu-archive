@@ -1,6 +1,7 @@
+//components/profile/ProfileTabs.tsx
 "use client"
 
-export type TabKey = "posts" | "comments" | "votes"
+export type TabKey = "posts" | "comments" | "votes" | "bookmarks" | "citations"
 
 export default function ProfileTabs({
   active,
@@ -9,10 +10,18 @@ export default function ProfileTabs({
 }: {
   active: TabKey
   onChange: (k: TabKey) => void
-  counts: { posts: number; comments: number; votes: number; requests?: number }
+  counts: {
+    posts: number
+    comments: number
+    votes: number
+    bookmarks: number
+    citations: number
+    requests?: number
+  }
 }) {
   const btn = (key: TabKey, label: string, count?: number) => (
     <button
+      key={key}
       type="button"
       onClick={() => onChange(key)}
       className={
@@ -31,7 +40,8 @@ export default function ProfileTabs({
       {btn("posts", "Posts", counts.posts)}
       {btn("comments", "Comments", counts.comments)}
       {btn("votes", "Votes", counts.votes)}
-      
+      {btn("bookmarks", "Bookmarks", counts.bookmarks)}
+      {btn("citations", "Citations", counts.citations)}
     </div>
   )
 }

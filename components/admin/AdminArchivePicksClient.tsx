@@ -6,6 +6,8 @@ import Link from "next/link"
 
 type Role = "ADMIN" | "PROFESSOR" | "GRAD" | "CONTRIBUTOR" | "USER"
 
+type Pick = { id: string; active: boolean; createdAt: string; adminId: string; note: string | null } | null
+
 type Row = {
   id: string
   title: string
@@ -15,7 +17,7 @@ type Row = {
   views: number
   authorId: string
   author: { id: string; name: string | null; profile: { displayName: string; role: Role } | null }
-  archivePicks: Array<{ id: string; active: boolean; createdAt: string; adminId: string; note: string | null }>
+  archivePick: Pick
 }
 
 export default function AdminPostsClient() {
@@ -91,7 +93,7 @@ export default function AdminPostsClient() {
       ) : (
         <div className="space-y-2">
           {list.map((p) => {
-            const picked = (p.archivePicks?.length ?? 0) > 0
+            const picked = !!p.archivePick?.active
             const authorName = p.author.profile?.displayName ?? p.author.name ?? p.authorId
 
             return (

@@ -2,6 +2,7 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { getMeWithRole, canManageCategory } from "@/lib/acl"
+import { syncCitationsTx } from "@/lib/citationSync"
 
 type Ctx = { params: Promise<{ id: string }> }
 
@@ -52,28 +53,47 @@ export async function PUT(req: Request, ctx: Ctx) {
 
   const existing = await prisma.post.findUnique({
     where: { id },
-    select: { category: true },
+    select: { id: true, category: true },
   })
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 })
 
-  // ✅ 동일 권한 정책: "이 카테고리를 관리할 권한"이 있어야 수정 가능
+  // 기존 카테고리 수정 권한
   if (!canManageCategory(me.role, existing.category)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 
-  // ✅ (중요) 카테고리 변경도 가능하게 할지?
-  // 동일 정책을 유지하려면:
-  // - 기존 카테고리 수정 권한 + 변경될 카테고리 작성 권한 둘 다 있어야 안전
+  // 카테고리 변경 시, 변경될 카테고리 권한도 필요
   if (category !== existing.category) {
     if (!canManageCategory(me.role, category)) {
       return NextResponse.json({ error: "Forbidden (target category)" }, { status: 403 })
     }
   }
 
-  const updated = await prisma.post.update({
-    where: { id },
-    data: { title, content, category },
-    select: { id: true, category: true },
+  const updated = await prisma.$transaction(async (tx) => {
+    const post = await tx.post.update({
+      where: { id },
+      data: { title, content, category },
+      select: { id: true, category: true, content: true },
+    })
+
+    await tx.activityLog.create({
+      data: {
+        actorId: me.id,
+        action: "POST_UPDATE",
+        postId: post.id,
+        meta: { fromCategory: existing.category, toCategory: post.category },
+      },
+    })
+
+    // Citation re-sync
+    await syncCitationsTx({
+      tx,
+      actorId: me.id,
+      fromPostId: post.id,
+      contentHtml: post.content,
+    })
+
+    return { id: post.id, category: post.category }
   })
 
   return NextResponse.json(updated, { status: 200 })
@@ -87,15 +107,27 @@ export async function DELETE(_req: Request, ctx: Ctx) {
 
   const existing = await prisma.post.findUnique({
     where: { id },
-    select: { category: true },
+    select: { id: true, category: true },
   })
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 })
 
-  // ✅ 동일 권한 정책: "이 카테고리를 관리할 권한"이 있어야 삭제 가능
   if (!canManageCategory(me.role, existing.category)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 
-  await prisma.post.delete({ where: { id } })
+  await prisma.$transaction(async (tx) => {
+    // 삭제 로그를 먼저 남김 (post delete 후에는 postId FK 처리에 따라 관계가 끊길 수 있음)
+    await tx.activityLog.create({
+      data: {
+        actorId: me.id,
+        action: "POST_DELETE",
+        postId: existing.id,
+        meta: { category: existing.category },
+      },
+    })
+
+    await tx.post.delete({ where: { id: existing.id } })
+  })
+
   return NextResponse.json({ ok: true, category: existing.category }, { status: 200 })
 }

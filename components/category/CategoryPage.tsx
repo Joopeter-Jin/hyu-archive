@@ -68,28 +68,27 @@ export default async function CategoryPage({
       : ({ createdAt: "desc" } as const)
 
   const [total, posts] = await Promise.all([
-  prisma.post.count({ where }),
-  prisma.post.findMany({
-    where,
-    select: {
-      id: true,
-      title: true,
-      createdAt: true,
-      views: true,
-      authorId: true,
-      author: {
-        select: {
-          id: true,
-          name: true,
-          profile: { select: { displayName: true } },
+    prisma.post.count({ where }),
+    prisma.post.findMany({
+      where,
+      select: {
+        id: true,
+        title: true,
+        createdAt: true,
+        views: true,
+        author: {
+          select: {
+            id: true,
+            name: true,
+            profile: { select: { displayName: true } },
+          },
         },
       },
-    },
-    orderBy: sort === "top" ? ({ createdAt: "desc" } as const) : orderBy,
-    skip,
-    take,
-  }),
-])
+      orderBy: sort === "top" ? ({ createdAt: "desc" } as const) : orderBy,
+      skip,
+      take,
+    }),
+  ])
 
   const totalPages = Math.max(1, Math.ceil(total / perPage))
   const safePage = Math.min(page, totalPages)
@@ -106,7 +105,7 @@ export default async function CategoryPage({
         <div className="flex items-center gap-2 md:justify-end">
           <SubscribeToggle category={category} />
           <WriteButton href={`/${category}/write`} category={category} />
-        </div>  
+        </div>
       </div>
 
       <ListControls />
@@ -124,24 +123,29 @@ export default async function CategoryPage({
             return (
               <div
                 key={post.id}
-                className="p-4 border border-neutral-800 rounded-lg hover:bg-neutral-900 transition"
+                className="relative p-4 border border-neutral-800 rounded-lg hover:bg-neutral-900 transition"
               >
-                <div className="flex items-start justify-between gap-4">
+                {/* ✅ 블록 전체 클릭용 오버레이 링크 (위에 깔기) */}
+                <Link
+                  href={`/post/${post.id}`}
+                  className="absolute inset-0 z-10 block rounded-lg"
+                  aria-label={`Open post ${post.title}`}
+                />
+
+                {/* ✅ 컨텐츠는 클릭을 통과시키기 */}
+                <div className="relative z-0 pointer-events-none flex items-start justify-between gap-4">
                   <div className="min-w-0">
-                    {/* ✅ 제목만 글 링크 */}
-                    <Link href={`/post/${post.id}`} className="font-medium truncate hover:underline">
-                      {post.title}
-                    </Link>
+                    <div className="font-medium truncate">{post.title}</div>
                   </div>
 
                   <div className="flex shrink-0 items-center gap-3 text-xs text-neutral-400">
                     <div className="text-neutral-500">{date}</div>
                     <div className="text-neutral-600">·</div>
 
-                    {/* ✅ 작성자만 유저 링크 (onClick 필요 없음) */}
+                    {/* ✅ 작성자 링크만 클릭 가능하게 복구 */}
                     <Link
                       href={`/u/${post.author.id}`}
-                      className="max-w-[160px] truncate hover:underline"
+                      className="relative z-20 pointer-events-auto max-w-[160px] truncate hover:underline"
                     >
                       {displayName}
                     </Link>

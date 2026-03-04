@@ -4,150 +4,86 @@ import { prisma } from "@/lib/prisma"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/app/api/auth/[...nextauth]/route"
 
-type VoteType = "POST" | "COMMENT"
-type VoteValue = "UP" | "DOWN"
-
-async function getAuthUserId() {
-  const session = await getServerSession(authOptions)
-  return (session?.user as any)?.id as string | undefined
-}
-
-function badRequest(msg: string) {
-  return NextResponse.json({ error: msg }, { status: 400 })
-}
-
-function parseType(raw: string | null): VoteType | null {
-  if (raw === "POST" || raw === "COMMENT") return raw
-  return null
-}
-function parseValue(raw: any): VoteValue | null {
-  if (raw === "UP" || raw === "DOWN") return raw
-  return null
-}
-
-/**
- * GET /api/votes?type=POST&targetId=uuid
- * GET /api/votes?type=COMMENT&targetId=uuid
- */
-export async function GET(req: Request) {
-  const { searchParams } = new URL(req.url)
-  const type = parseType(searchParams.get("type"))
-  const targetId = searchParams.get("targetId")
-
-  if (!type) return badRequest("Invalid type (POST|COMMENT)")
-  if (!targetId) return badRequest("targetId is required")
-
-  const userId = await getAuthUserId()
-
-  const where =
-    type === "POST" ? { postId: targetId } : { commentId: targetId }
-
-  const [up, down, my] = await Promise.all([
-    prisma.vote.count({ where: { ...where, value: "UP" } }),
-    prisma.vote.count({ where: { ...where, value: "DOWN" } }),
-    userId
-      ? prisma.vote.findFirst({
-          where: { ...where, userId },
-          select: { value: true },
-        })
-      : Promise.resolve(null),
-  ])
-
-  return NextResponse.json(
-    {
-      up,
-      down,
-      score: up - down,
-      myVote: my?.value ?? null, // "UP" | "DOWN" | null
-    },
-    { status: 200 }
-  )
-}
-
-/**
- * POST /api/votes
- * body: { type: "POST"|"COMMENT", targetId: string, value: "UP"|"DOWN" }
- * => 같은 대상에 대해 내 투표를 UP/DOWN으로 "설정"(upsert)
- */
 export async function POST(req: Request) {
-  const userId = await getAuthUserId()
+  const session = await getServerSession(authOptions)
+  const userId = (session?.user as any)?.id as string | undefined
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-  const body = await req.json().catch(() => ({}))
-  const type = parseType(body.type ?? null)
-  const targetId = String(body.targetId ?? "")
-  const value = parseValue(body.value)
+  const body = await req.json().catch(() => null)
+  const type = body?.type as "POST" | "COMMENT" | undefined
+  const targetId = body?.targetId as string | undefined
+  const value = body?.value as "UP" | "DOWN" | undefined
+  const enabled = body?.enabled as boolean | undefined // ✅ 추가
 
-  if (!type) return badRequest("Invalid type (POST|COMMENT)")
-  if (!targetId) return badRequest("targetId is required")
-  if (!value) return badRequest("Invalid value (UP|DOWN)")
+  if (!type || !targetId || !value) {
+    return NextResponse.json({ error: "Bad Request" }, { status: 400 })
+  }
 
-  // ✅ Prisma의 composite unique 이름:
-  // @@unique([userId, postId])     -> userId_postId
-  // @@unique([userId, commentId])  -> userId_commentId
-  const vote =
-    type === "POST"
-      ? await prisma.vote.upsert({
-          where: { userId_postId: { userId, postId: targetId } },
-          create: { userId, postId: targetId, value },
-          update: { value },
-          select: { id: true, value: true, postId: true, commentId: true, userId: true },
+  const isPost = type === "POST"
+  const whereUnique = isPost
+    ? { userId_postId: { userId, postId: targetId } }
+    : { userId_commentId: { userId, commentId: targetId } }
+
+  const existing = await prisma.vote.findUnique({
+    where: whereUnique as any,
+    select: { id: true, value: true, postId: true, commentId: true },
+  })
+
+  // ✅ enabled가 있으면 상태 기반(idempotent)
+  // - enabled=true: 해당 value로 보장(upsert/update)
+  // - enabled=false: 삭제 보장(delete)
+  if (typeof enabled === "boolean") {
+    if (!enabled) {
+      if (existing) {
+        await prisma.vote.delete({ where: { id: existing.id } })
+      }
+    } else {
+      if (!existing) {
+        await prisma.vote.create({
+          data: {
+            userId,
+            value,
+            ...(isPost ? { postId: targetId } : { commentId: targetId }),
+          } as any,
         })
-      : await prisma.vote.upsert({
-          where: { userId_commentId: { userId, commentId: targetId } },
-          create: { userId, commentId: targetId, value },
-          update: { value },
-          select: { id: true, value: true, postId: true, commentId: true, userId: true },
-        })
+      } else if (existing.value !== value) {
+        await prisma.vote.update({ where: { id: existing.id }, data: { value } })
+      }
+    }
+  } else {
+    // ✅ 기존 토글 방식(하위호환)
+    if (!existing) {
+      await prisma.vote.create({
+        data: {
+          userId,
+          value,
+          ...(isPost ? { postId: targetId } : { commentId: targetId }),
+        } as any,
+      })
+    } else if (existing.value === value) {
+      await prisma.vote.delete({ where: { id: existing.id } })
+    } else {
+      await prisma.vote.update({ where: { id: existing.id }, data: { value } })
+    }
+  }
 
-  // 최신 집계 반환(UX 좋아짐)
-  const where =
-    type === "POST" ? { postId: targetId } : { commentId: targetId }
+  // ✅ 응답: (POST만) engagement bar가 바로 확정할 수 있게 counts/mine 반환
+  if (isPost) {
+    const [up, down, mine] = await Promise.all([
+      prisma.vote.count({ where: { postId: targetId, value: "UP" } }),
+      prisma.vote.count({ where: { postId: targetId, value: "DOWN" } }),
+      prisma.vote.findUnique({
+        where: { userId_postId: { userId, postId: targetId } },
+        select: { value: true },
+      }),
+    ])
 
-  const [up, down] = await Promise.all([
-    prisma.vote.count({ where: { ...where, value: "UP" } }),
-    prisma.vote.count({ where: { ...where, value: "DOWN" } }),
-  ])
+    return NextResponse.json(
+      { ok: true, postId: targetId, votes: { up, down }, mine: { vote: mine?.value ?? null } },
+      { status: 200 }
+    )
+  }
 
-  return NextResponse.json(
-    { ok: true, vote, up, down, score: up - down, myVote: vote.value },
-    { status: 200 }
-  )
-}
-
-/**
- * DELETE /api/votes
- * body: { type: "POST"|"COMMENT", targetId: string }
- * => 내 투표 "취소"
- */
-export async function DELETE(req: Request) {
-  const userId = await getAuthUserId()
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-
-  const body = await req.json().catch(() => ({}))
-  const type = parseType(body.type ?? null)
-  const targetId = String(body.targetId ?? "")
-
-  if (!type) return badRequest("Invalid type (POST|COMMENT)")
-  if (!targetId) return badRequest("targetId is required")
-
-  const where =
-    type === "POST"
-      ? { userId, postId: targetId }
-      : { userId, commentId: targetId }
-
-  await prisma.vote.deleteMany({ where })
-
-  const aggWhere =
-    type === "POST" ? { postId: targetId } : { commentId: targetId }
-
-  const [up, down] = await Promise.all([
-    prisma.vote.count({ where: { ...aggWhere, value: "UP" } }),
-    prisma.vote.count({ where: { ...aggWhere, value: "DOWN" } }),
-  ])
-
-  return NextResponse.json(
-    { ok: true, up, down, score: up - down, myVote: null },
-    { status: 200 }
-  )
+  // COMMENT는 기존 UI(VoteButtons)가 있다면 그쪽 규격 유지
+  return NextResponse.json({ ok: true }, { status: 200 })
 }

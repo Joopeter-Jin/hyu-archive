@@ -32,7 +32,7 @@ export async function GET(_req: Request, ctx: Ctx) {
           id: true,
           name: true,
           image: true,
-          profile: { select: { displayName: true, role: true } },
+          profile: { select: { displayName: true, role: true, contributorLevel: true, } },
         },
       },
     },

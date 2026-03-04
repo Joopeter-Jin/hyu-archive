@@ -2,6 +2,7 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { getMeWithRole, canManageCategory } from "@/lib/acl"
+import { syncCitationsTx } from "@/lib/citationSync"
 
 type AttachmentDTO = {
   url: string
@@ -55,7 +56,6 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
-    // ✅ 로그인 + role
     const me = await getMeWithRole()
     if (!me) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
@@ -67,7 +67,6 @@ export async function POST(req: Request) {
     if (!title) return NextResponse.json({ error: "Title is required" }, { status: 400 })
     if (!category) return NextResponse.json({ error: "Category is required" }, { status: 400 })
 
-    // ✅ 카테고리 권한 체크 (작성/수정/삭제 동일)
     if (!canManageCategory(me.role, category)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
@@ -85,7 +84,7 @@ export async function POST(req: Request) {
     const created = await prisma.$transaction(async (tx) => {
       const post = await tx.post.create({
         data: { title, content, category, authorId: me.id },
-        select: { id: true, category: true },
+        select: { id: true, category: true, content: true },
       })
 
       if (attachments.length > 0) {
@@ -100,14 +99,35 @@ export async function POST(req: Request) {
         })
       }
 
+      // ActivityLog: POST_CREATE
+      await tx.activityLog.create({
+        data: {
+          actorId: me.id,
+          action: "POST_CREATE",
+          postId: post.id,
+          meta: { category: post.category },
+        },
+      })
+
+      // Citation sync (fromPost = 새 글)
+      await syncCitationsTx({
+        tx,
+        actorId: me.id,
+        fromPostId: post.id,
+        contentHtml: post.content,
+      })
+
+      // 구독자 있으면 job enqueue (NotifyChannel: "EMAIL" 문자열 사용 OK)
       const subCount = await tx.subscription.count({
         where: { category: post.category, active: true, channel: "EMAIL" },
       })
       if (subCount > 0) {
-        await tx.notificationJob.create({ data: { postId: post.id, category: post.category } })
+        await tx.notificationJob.create({
+          data: { postId: post.id, category: post.category, channel: "EMAIL" },
+        })
       }
 
-      return post
+      return { id: post.id, category: post.category }
     })
 
     return NextResponse.json(created, { status: 201 })
