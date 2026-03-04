@@ -65,14 +65,17 @@ export async function GET() {
       },
     }),
 
+    // ✅ Received: 내 글이 인용된 수 (toPost.authorId = me)
     prisma.citation.count({
       where: { toPost: { authorId: userId } },
     }),
 
+    // ✅ Given: 내가 다른 글을 인용한 수 (fromPost.authorId = me)
     prisma.citation.count({
       where: { fromPost: { authorId: userId } },
     }),
 
+    // ✅ Bookmark: Reaction 테이블로 관리(type="BOOKMARK")
     prisma.reaction.findMany({
       where: { userId, type: "BOOKMARK" },
       orderBy: { createdAt: "desc" },
@@ -84,7 +87,7 @@ export async function GET() {
       },
     }),
 
-    // ✅ Received: 내 글(toPost)이 인용된 목록
+    // ✅ Received items: 내 글(toPost)이 인용된 목록
     prisma.citation.findMany({
       where: { toPost: { authorId: userId } },
       orderBy: { createdAt: "desc" },
@@ -107,13 +110,11 @@ export async function GET() {
             },
           },
         },
-        toPost: {
-          select: { id: true, title: true, category: true },
-        },
+        toPost: { select: { id: true, title: true, category: true } },
       },
     }),
 
-    // ✅ Given: 내가(fromPost) 인용한 목록
+    // ✅ Given items: 내가(fromPost) 인용한 목록
     prisma.citation.findMany({
       where: { fromPost: { authorId: userId } },
       orderBy: { createdAt: "desc" },
@@ -121,9 +122,7 @@ export async function GET() {
       select: {
         id: true,
         createdAt: true,
-        fromPost: {
-          select: { id: true, title: true, category: true, createdAt: true },
-        },
+        fromPost: { select: { id: true, title: true, category: true, createdAt: true } },
         toPost: {
           select: {
             id: true,
@@ -159,8 +158,14 @@ export async function GET() {
       citationsReceived,
       citationsGiven,
 
-      bookmarks: bookmarks.map((b) => ({ id: b.id, createdAt: b.createdAt, post: b.post })),
+      // ✅ ProfileClient(ActivityDTO.bookmarks)와 맞춤
+      bookmarks: bookmarks.map((b) => ({
+        id: b.id,
+        createdAt: b.createdAt,
+        post: b.post,
+      })),
 
+      // ✅ ProfileClient(ActivityDTO.citationsItemsReceived)와 맞춤
       citationsItemsReceived: citationsItemsReceived.map((c) => ({
         id: c.id,
         createdAt: c.createdAt,
@@ -174,6 +179,7 @@ export async function GET() {
         toPost: c.toPost,
       })),
 
+      // ✅ ProfileClient(ActivityDTO.citationsItemsGiven)와 맞춤
       citationsItemsGiven: citationsItemsGiven.map((c) => ({
         id: c.id,
         createdAt: c.createdAt,

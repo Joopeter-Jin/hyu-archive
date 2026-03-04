@@ -1,16 +1,18 @@
 // app/api/profile/me/route.ts
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/app/api/auth/[...nextauth]/route"
+import { requireUser } from "@/lib/authz"
+
+function json(data: any, status = 200) {
+  return NextResponse.json(data, { status })
+}
 
 export async function GET() {
-  const session = await getServerSession(authOptions)
-  const userId = (session?.user as any)?.id as string | undefined
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const me = await requireUser()
+  if (!me) return json({ error: "Unauthorized" }, 401)
 
-  const me = await prisma.user.findUnique({
-    where: { id: userId },
+  const user = await prisma.user.findUnique({
+    where: { id: me.id },
     select: {
       id: true,
       name: true,
@@ -20,6 +22,7 @@ export async function GET() {
         select: {
           displayName: true,
           role: true,
+          contributorLevel: true,
           createdAt: true,
           updatedAt: true,
         },
@@ -27,6 +30,6 @@ export async function GET() {
     },
   })
 
-  if (!me) return NextResponse.json({ error: "Not found" }, { status: 404 })
-  return NextResponse.json(me, { status: 200 })
+  if (!user) return json({ error: "Not found" }, 404)
+  return json(user, 200)
 }
