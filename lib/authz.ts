@@ -1,30 +1,27 @@
 // lib/authz.ts
-import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/app/api/auth/[...nextauth]/route"
 
+export type Role = "ADMIN" | "PROFESSOR" | "GRAD" | "CONTRIBUTOR" | "USER"
+
 export async function requireUser() {
   const session = await getServerSession(authOptions)
   const userId = (session?.user as any)?.id as string | undefined
-  if (!userId) {
-    return { ok: false as const, res: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) }
-  }
-  return { ok: true as const, userId }
+  if (!userId) return null
+
+  const me = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, profile: { select: { role: true } } },
+  })
+  if (!me) return null
+
+  const role = (me.profile?.role ?? "USER") as Role
+  return { id: me.id, role }
 }
 
-export async function requireAdmin() {
-  const u = await requireUser()
-  if (!u.ok) return u
-
-  const me = await prisma.userProfile.findUnique({
-    where: { userId: u.userId },
-    select: { role: true },
-  })
-
-  if (me?.role !== "ADMIN") {
-    return { ok: false as const, res: NextResponse.json({ error: "Forbidden" }, { status: 403 }) }
-  }
-
-  return { ok: true as const, userId: u.userId }
+export function hasRole(me: { role: Role } | null, allowed: Role[]) {
+  if (!me) return false
+  if (me.role === "ADMIN") return true
+  return allowed.includes(me.role)
 }
