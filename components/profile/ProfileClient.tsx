@@ -1,7 +1,7 @@
 // components/profile/ProfileClient.tsx
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { signIn, useSession } from "next-auth/react"
 import RoleBadge from "@/components/profile/RoleBadge"
@@ -81,23 +81,19 @@ type ActivityDTO = {
     } | null
   }>
 
-  // legacy summary
   citationsReceived: number
 
-  // bookmarks
   bookmarks: Array<{
     id: string
     createdAt: string
     post: { id: string; title: string; category: string; createdAt: string; views: number }
   }>
 
-  // citations (new: both)
   citationsReceivedCount: number
   citationsGivenCount: number
   citationsItemsReceived: CitationReceivedItem[]
   citationsItemsGiven: CitationGivenItem[]
 
-  // (optional legacy field, keep safe)
   citationsItems?: CitationReceivedItem[]
 }
 
@@ -119,6 +115,15 @@ type ScoreDTO = {
   }
 }
 
+type BootDTO = {
+  me: MeDTO
+  counts: { posts: number; comments: number; votes: number; bookmarks: number; citations: number }
+  citationsReceived: number
+  citationsReceivedCount: number
+  citationsGivenCount: number
+  scoreCached: ScoreDTO | null
+}
+
 function stripHtml(html: string) {
   return html.replace(/<[^>]*>/g, "").trim()
 }
@@ -126,12 +131,23 @@ function stripHtml(html: string) {
 type ExtraTab = "roleRequest" | "admin"
 type AnyTab = TabKey | ExtraTab
 
+type LoadedTabs = {
+  posts?: ActivityDTO["posts"]
+  comments?: ActivityDTO["comments"]
+  votes?: ActivityDTO["votes"]
+  bookmarks?: ActivityDTO["bookmarks"]
+  citationsReceivedItems?: CitationReceivedItem[]
+  citationsGivenItems?: CitationGivenItem[]
+}
+
 export default function ProfileClient() {
   const { status } = useSession()
 
   const [meData, setMeData] = useState<MeDTO | null>(null)
-  const [activity, setActivity] = useState<ActivityDTO | null>(null)
   const [score, setScore] = useState<ScoreDTO | null>(null)
+
+  // activity는 “전체”를 한 번에 안 가져오고, 탭별로 채워 넣는다
+  const [activity, setActivity] = useState<ActivityDTO | null>(null)
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -140,63 +156,50 @@ export default function ProfileClient() {
   const [displayName, setDisplayName] = useState("")
   const [tab, setTab] = useState<AnyTab>("posts")
 
-  const load = async () => {
+  // 탭별 로딩/캐시
+  const [tabLoading, setTabLoading] = useState(false)
+  const loadedRef = useRef<LoadedTabs>({})
+  const inflightRef = useRef<Record<string, Promise<any> | null>>({})
+
+  const makeEmptyActivity = (boot: BootDTO): ActivityDTO => ({
+    posts: [],
+    comments: [],
+    votes: [],
+    bookmarks: [],
+    citationsReceived: boot.citationsReceived ?? 0,
+
+    citationsReceivedCount: boot.citationsReceivedCount ?? 0,
+    citationsGivenCount: boot.citationsGivenCount ?? 0,
+
+    citationsItemsReceived: [],
+    citationsItemsGiven: [],
+  })
+
+  const loadBoot = async () => {
     setLoading(true)
     setErr(null)
     try {
-      const [meRes, actRes, scoreRes] = await Promise.all([
-        fetch("/api/profile/me", { cache: "no-store" }),
-        fetch("/api/profile/activity", { cache: "no-store" }),
-        fetch("/api/profile/score", { cache: "no-store" }),
-      ])
-
-      if (meRes.status === 401 || actRes.status === 401) {
+      const res = await fetch("/api/profile/boot", { cache: "no-store" })
+      if (res.status === 401) {
         setMeData(null)
         setActivity(null)
         setScore(null)
         return
       }
+      if (!res.ok) throw new Error(await res.text().catch(() => "Failed to load boot"))
+      const boot = (await res.json()) as BootDTO
 
-      if (!meRes.ok) throw new Error(await meRes.text().catch(() => "Failed to load profile"))
-      if (!actRes.ok) throw new Error(await actRes.text().catch(() => "Failed to load activity"))
+      setMeData(boot.me)
+      setDisplayName(boot.me.profile?.displayName ?? "")
+      setScore(boot.scoreCached ?? null)
 
-      const meJson = (await meRes.json()) as MeDTO
-      const actJsonRaw = (await actRes.json()) as any
+      // activity 스켈레톤(카운트/요약만)
+      setActivity(makeEmptyActivity(boot))
 
-      // ✅ 안전 기본값 + 레거시 호환
-      const receivedItems: CitationReceivedItem[] =
-        actJsonRaw.citationsItemsReceived ??
-        actJsonRaw.citationsItems ??
-        []
-
-      const givenItems: CitationGivenItem[] =
-        actJsonRaw.citationsItemsGiven ??
-        []
-
-      const actJson: ActivityDTO = {
-        posts: actJsonRaw.posts ?? [],
-        comments: actJsonRaw.comments ?? [],
-        votes: actJsonRaw.votes ?? [],
-        citationsReceived: actJsonRaw.citationsReceived ?? receivedItems.length ?? 0,
-
-        bookmarks: actJsonRaw.bookmarks ?? [],
-
-        citationsReceivedCount: actJsonRaw.citationsReceivedCount ?? actJsonRaw.citationsReceived ?? receivedItems.length ?? 0,
-        citationsGivenCount: actJsonRaw.citationsGivenCount ?? actJsonRaw.citationsGiven ?? givenItems.length ?? 0,
-
-        citationsItemsReceived: receivedItems,
-        citationsItemsGiven: givenItems,
-
-        citationsItems: actJsonRaw.citationsItems ?? undefined,
-      }
-
-      let scoreJson: ScoreDTO | null = null
-      if (scoreRes.ok) scoreJson = (await scoreRes.json()) as ScoreDTO
-
-      setMeData(meJson)
-      setActivity(actJson)
-      setScore(scoreJson)
-      setDisplayName(meJson.profile?.displayName ?? "")
+      // 첫 탭(posts)을 즉시 로드 (체감 속도 ↑)
+      // 단, status authenticated 이후에만 호출되도록 useEffect에서 부름
+      loadedRef.current = {}
+      inflightRef.current = {}
     } catch (e: any) {
       setErr(e?.message ?? "Failed to load")
     } finally {
@@ -204,8 +207,131 @@ export default function ProfileClient() {
     }
   }
 
+  const loadTabData = async (tabKey: AnyTab) => {
+    // Extra tab들은 데이터 로딩 없음
+    if (tabKey === "admin" || tabKey === "roleRequest") return
+    if (!activity) return
+
+    // 이미 로드된 탭이면 종료
+    const loaded = loadedRef.current
+
+    const mapToApiTab = (k: AnyTab) => {
+      if (k === "posts") return "posts"
+      if (k === "comments") return "comments"
+      if (k === "votes") return "votes"
+      if (k === "bookmarks") return "bookmarks"
+      if (k === "citations") return "citations-received" // CitationsPanel이 내부에서 received/given을 나눠 로드
+      return ""
+    }
+
+    const apiTab = mapToApiTab(tabKey)
+    if (!apiTab) return
+
+    // posts/comments/votes/bookmarks는 여기서 로드하고 activity에 반영
+    if (tabKey !== "citations") {
+      if ((tabKey === "posts" && loaded.posts) ||
+          (tabKey === "comments" && loaded.comments) ||
+          (tabKey === "votes" && loaded.votes) ||
+          (tabKey === "bookmarks" && loaded.bookmarks)) return
+    }
+
+    // inflight 중복 방지
+    if (inflightRef.current[apiTab]) return inflightRef.current[apiTab]!
+
+    setTabLoading(true)
+    setErr(null)
+
+    const p = (async () => {
+      const res = await fetch(`/api/profile/activity?tab=${encodeURIComponent(apiTab)}`, { cache: "no-store" })
+      if (res.status === 401) throw new Error("Unauthorized")
+      if (!res.ok) throw new Error(await res.text().catch(() => "Failed"))
+      const json = await res.json()
+
+      // 탭별 반영
+      if (tabKey === "posts") {
+        loadedRef.current.posts = json.posts ?? []
+        setActivity((prev) => (prev ? { ...prev, posts: loadedRef.current.posts! } : prev))
+      } else if (tabKey === "comments") {
+        loadedRef.current.comments = json.comments ?? []
+        setActivity((prev) => (prev ? { ...prev, comments: loadedRef.current.comments! } : prev))
+      } else if (tabKey === "votes") {
+        loadedRef.current.votes = json.votes ?? []
+        setActivity((prev) => (prev ? { ...prev, votes: loadedRef.current.votes! } : prev))
+      } else if (tabKey === "bookmarks") {
+        loadedRef.current.bookmarks = json.bookmarks ?? []
+        setActivity((prev) => (prev ? { ...prev, bookmarks: loadedRef.current.bookmarks! } : prev))
+      }
+    })()
+      .catch((e) => {
+        setErr(e?.message ?? "Failed")
+      })
+      .finally(() => {
+        inflightRef.current[apiTab] = null
+        setTabLoading(false)
+      })
+
+    inflightRef.current[apiTab] = p
+    return p
+  }
+
+  // CitationsPanel 내부에서 호출할 lazy loader
+  const loadCitations = async (mode: "received" | "given") => {
+    if (!activity) return
+
+    const loaded = loadedRef.current
+    const apiTab = mode === "received" ? "citations-received" : "citations-given"
+
+    if (mode === "received" && loaded.citationsReceivedItems) return
+    if (mode === "given" && loaded.citationsGivenItems) return
+
+    if (inflightRef.current[apiTab]) return inflightRef.current[apiTab]!
+
+    setTabLoading(true)
+    setErr(null)
+
+    const p = (async () => {
+      const res = await fetch(`/api/profile/activity?tab=${encodeURIComponent(apiTab)}`, { cache: "no-store" })
+      if (res.status === 401) throw new Error("Unauthorized")
+      if (!res.ok) throw new Error(await res.text().catch(() => "Failed"))
+      const json = await res.json()
+
+      if (mode === "received") {
+        loadedRef.current.citationsReceivedItems = json.citationsItemsReceived ?? []
+        setActivity((prev) =>
+          prev ? { ...prev, citationsItemsReceived: loadedRef.current.citationsReceivedItems! } : prev
+        )
+      } else {
+        loadedRef.current.citationsGivenItems = json.citationsItemsGiven ?? []
+        setActivity((prev) =>
+          prev ? { ...prev, citationsItemsGiven: loadedRef.current.citationsGivenItems! } : prev
+        )
+      }
+    })()
+      .catch((e) => {
+        setErr(e?.message ?? "Failed")
+      })
+      .finally(() => {
+        inflightRef.current[apiTab] = null
+        setTabLoading(false)
+      })
+
+    inflightRef.current[apiTab] = p
+    return p
+  }
+
+  // boot + first tab load
   useEffect(() => {
-    if (status === "authenticated") load()
+    if (status === "authenticated") {
+      ;(async () => {
+        await loadBoot()
+        // posts는 첫 화면에서 바로 보여주면 체감이 좋아서 선로딩
+        // (meData/activity가 setState라 다음 tick에서 activity가 생기므로 약간 딜레이)
+        setTimeout(() => {
+          loadTabData("posts")
+        }, 0)
+      })()
+    }
+
     if (status === "unauthenticated") {
       setLoading(false)
       setMeData(null)
@@ -215,7 +341,16 @@ export default function ProfileClient() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status])
 
+  // 탭 바뀌면 그 탭 데이터만 로드
+  useEffect(() => {
+    if (status !== "authenticated") return
+    if (!activity) return
+    loadTabData(tab)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, activity, status])
+
   const counts = useMemo(() => {
+    // counts는 boot에서 이미 내려오지만, 탭 로드 후 길이로도 맞춰주면 자연스럽게 동기화됨
     const citationsTotal =
       (activity?.citationsItemsReceived?.length ?? 0) + (activity?.citationsItemsGiven?.length ?? 0)
 
@@ -224,7 +359,7 @@ export default function ProfileClient() {
       comments: activity?.comments?.length ?? 0,
       votes: activity?.votes?.length ?? 0,
       bookmarks: activity?.bookmarks?.length ?? 0,
-      citations: citationsTotal,
+      citations: citationsTotal || ((activity?.citationsReceivedCount ?? 0) + (activity?.citationsGivenCount ?? 0)),
     }
   }, [activity])
 
@@ -241,7 +376,14 @@ export default function ProfileClient() {
         const txt = await res.text().catch(() => "")
         throw new Error(txt || "Failed to save display name")
       }
-      await load()
+      await loadBoot()
+      // 현재 탭 재로딩
+      setTimeout(() => {
+        loadTabData(tab)
+        if (tab === "citations") {
+          loadCitations("received")
+        }
+      }, 0)
     } catch (e: any) {
       setErr(e?.message ?? "Failed to save")
     } finally {
@@ -267,7 +409,6 @@ export default function ProfileClient() {
 
   const role: Role = meData.profile?.role ?? "USER"
   const isAdmin = role === "ADMIN"
-
   const level = score?.contributorLevel ?? meData.profile?.contributorLevel ?? 0
   const coreCandidate = score?.coreCandidate ?? false
 
@@ -312,7 +453,10 @@ export default function ProfileClient() {
 
       {score && (
         <div className="rounded-2xl border border-neutral-800 bg-neutral-950 p-6 space-y-4">
-          <div className="text-sm font-semibold">90-day score</div>
+          <div className="flex items-center justify-between">
+            <div className="text-sm font-semibold">90-day score</div>
+            <div className="text-xs text-neutral-500">{tabLoading ? "Updating..." : ""}</div>
+          </div>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <ScoreBox label="Total" value={score.total} />
@@ -397,6 +541,10 @@ export default function ProfileClient() {
       {tab === "roleRequest" && <RoleRequestClient />}
       {tab === "admin" && isAdmin && <AdminPanel />}
 
+      {tabLoading && tab !== "admin" && tab !== "roleRequest" && (
+        <div className="text-xs text-neutral-500">Loading tab...</div>
+      )}
+
       {tab === "posts" && (
         <div className="space-y-3">
           {activity.posts.length === 0 ? (
@@ -424,7 +572,9 @@ export default function ProfileClient() {
                 key={c.id}
                 title={c.isDeleted ? "(Deleted comment)" : stripHtml(c.content).slice(0, 120) || "(empty)"}
                 href={`/post/${c.postId}`}
-                meta={`${new Date(c.createdAt).toLocaleString()} · on "${c.post.title}" · ${c.parentId ? "Reply" : "Comment"}`}
+                meta={`${new Date(c.createdAt).toLocaleString()} · on "${c.post.title}" · ${
+                  c.parentId ? "Reply" : "Comment"
+                }`}
                 right={
                   <span className="text-xs text-neutral-500 border border-neutral-800 rounded-lg px-2 py-1">
                     {c.parentId ? "Reply" : "Comment"}
@@ -487,9 +637,14 @@ export default function ProfileClient() {
         </div>
       )}
 
-      {/* ✅✅✅ Citations 탭: Received / Given 2단 토글 */}
       {tab === "citations" && (
-        <CitationsPanel received={activity.citationsItemsReceived} given={activity.citationsItemsGiven} />
+        <CitationsPanel
+          received={activity.citationsItemsReceived}
+          given={activity.citationsItemsGiven}
+          receivedCount={activity.citationsReceivedCount}
+          givenCount={activity.citationsGivenCount}
+          loadCitations={loadCitations}
+        />
       )}
     </div>
   )
@@ -498,40 +653,77 @@ export default function ProfileClient() {
 function CitationsPanel({
   received,
   given,
+  receivedCount,
+  givenCount,
+  loadCitations,
 }: {
   received: CitationReceivedItem[]
   given: CitationGivenItem[]
+  receivedCount: number
+  givenCount: number
+  loadCitations: (mode: "received" | "given") => Promise<any> | void
 }) {
   const [mode, setMode] = useState<"received" | "given">("received")
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    // citations 탭 들어오면 received 먼저 로드
+    ;(async () => {
+      setLoading(true)
+      try {
+        await loadCitations("received")
+      } finally {
+        setLoading(false)
+      }
+    })()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useEffect(() => {
+    ;(async () => {
+      setLoading(true)
+      try {
+        await loadCitations(mode)
+      } finally {
+        setLoading(false)
+      }
+    })()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode])
+
   const list = mode === "received" ? received : given
 
   return (
     <div className="space-y-3">
-      <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={() => setMode("received")}
-          className={
-            "text-sm border rounded-lg px-3 py-1.5 transition " +
-            (mode === "received"
-              ? "border-neutral-600 text-white"
-              : "border-neutral-800 text-neutral-300 hover:text-white hover:bg-neutral-900")
-          }
-        >
-          Received ({received.length})
-        </button>
-        <button
-          type="button"
-          onClick={() => setMode("given")}
-          className={
-            "text-sm border rounded-lg px-3 py-1.5 transition " +
-            (mode === "given"
-              ? "border-neutral-600 text-white"
-              : "border-neutral-800 text-neutral-300 hover:text-white hover:bg-neutral-900")
-          }
-        >
-          Given ({given.length})
-        </button>
+      <div className="flex items-center justify-between">
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => setMode("received")}
+            className={
+              "text-sm border rounded-lg px-3 py-1.5 transition " +
+              (mode === "received"
+                ? "border-neutral-600 text-white"
+                : "border-neutral-800 text-neutral-300 hover:text-white hover:bg-neutral-900")
+            }
+          >
+            Received ({receivedCount || received.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode("given")}
+            className={
+              "text-sm border rounded-lg px-3 py-1.5 transition " +
+              (mode === "given"
+                ? "border-neutral-600 text-white"
+                : "border-neutral-800 text-neutral-300 hover:text-white hover:bg-neutral-900")
+            }
+          >
+            Given ({givenCount || given.length})
+          </button>
+        </div>
+
+        <div className="text-xs text-neutral-500">{loading ? "Loading..." : ""}</div>
       </div>
 
       {list.length === 0 ? (

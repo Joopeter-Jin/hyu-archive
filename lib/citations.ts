@@ -16,4 +16,4 @@ export function extractPostIdsFromHtml(html: string): string[] {
     if (m[1]) out.add(m[1])
   }
   return [...out]
-}
+} 
