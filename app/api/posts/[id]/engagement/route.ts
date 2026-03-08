@@ -10,12 +10,12 @@ export async function GET(
 ) {
   const { id: postId } = await params
 
-  // 로그인 여부는 선택(비로그인도 counts는 보여줘야 함)
   const session = await getServerSession(authOptions)
   const userId = (session?.user as any)?.id as string | undefined
 
   const [
     commentsCount,
+    citationsCount,
     upCount,
     downCount,
     likeCount,
@@ -24,6 +24,11 @@ export async function GET(
     myReactions,
   ] = await Promise.all([
     prisma.comment.count({ where: { postId, isDeleted: false } }),
+
+    // ✅ 이 글이 다른 글에 의해 인용된 횟수
+    prisma.citation.count({
+      where: { toPostId: postId },
+    }),
 
     prisma.vote.count({ where: { postId, value: "UP" } }),
     prisma.vote.count({ where: { postId, value: "DOWN" } }),
@@ -53,6 +58,7 @@ export async function GET(
       postId,
       counts: {
         comments: commentsCount,
+        citations: citationsCount, // ✅ 추가
         votes: { up: upCount, down: downCount },
         reactions: { like: likeCount, bookmark: bookmarkCount },
       },

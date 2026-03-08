@@ -8,6 +8,7 @@ type EngagementDTO = {
   postId: string
   counts: {
     comments: number
+    citations: number
     votes: { up: number; down: number }
     reactions: { like: number; bookmark: number }
   }
@@ -64,26 +65,32 @@ export default function PostEngagementBar({ postId }: { postId: string }) {
     if (busy) return
     setBusy(true)
     try {
-      // ✅ next state 먼저 계산(상태 기반 enabled)
       const cur = data?.mine.vote ?? null
       const nextVote = cur === value ? null : value
-      const enabled = nextVote === value // true면 설정, false면 취소
+      const enabled = nextVote === value
 
-      // ✅ 낙관적 UI(먼저 반영)
       setData((prev) => {
         if (!prev) return prev
         let up = prev.counts.votes.up
         let down = prev.counts.votes.down
 
-        // cur 제거
         if (cur === "UP") up = Math.max(0, up - 1)
         if (cur === "DOWN") down = Math.max(0, down - 1)
 
-        // next 추가
         if (nextVote === "UP") up += 1
         if (nextVote === "DOWN") down += 1
 
-        return { ...prev, counts: { ...prev.counts, votes: { up, down } }, mine: { ...prev.mine, vote: nextVote } }
+        return {
+          ...prev,
+          counts: {
+            ...prev.counts,
+            votes: { up, down },
+          },
+          mine: {
+            ...prev.mine,
+            vote: nextVote,
+          },
+        }
       })
 
       const res = await fetch("/api/votes", {
@@ -97,13 +104,18 @@ export default function PostEngagementBar({ postId }: { postId: string }) {
         return
       }
 
-      // ✅ 서버 응답으로 "확정" (원복 방지)
       setData((prev) => {
         if (!prev) return prev
         return {
           ...prev,
-          counts: { ...prev.counts, votes: out?.votes ?? prev.counts.votes },
-          mine: { ...prev.mine, vote: out?.mine?.vote ?? prev.mine.vote },
+          counts: {
+            ...prev.counts,
+            votes: out?.votes ?? prev.counts.votes,
+          },
+          mine: {
+            ...prev.mine,
+            vote: out?.mine?.vote ?? prev.mine.vote,
+          },
         }
       })
     } finally {
@@ -119,18 +131,20 @@ export default function PostEngagementBar({ postId }: { postId: string }) {
       const curOn = type === "LIKE" ? (data?.mine.like ?? false) : (data?.mine.bookmark ?? false)
       const enabled = !curOn
 
-      // ✅ 낙관적 UI
       setData((prev) => {
         if (!prev) return prev
+
         const like = prev.counts.reactions.like + (type === "LIKE" ? (enabled ? 1 : -1) : 0)
-        const bookmark =
-          prev.counts.reactions.bookmark + (type === "BOOKMARK" ? (enabled ? 1 : -1) : 0)
+        const bookmark = prev.counts.reactions.bookmark + (type === "BOOKMARK" ? (enabled ? 1 : -1) : 0)
 
         return {
           ...prev,
           counts: {
             ...prev.counts,
-            reactions: { like: Math.max(0, like), bookmark: Math.max(0, bookmark) },
+            reactions: {
+              like: Math.max(0, like),
+              bookmark: Math.max(0, bookmark),
+            },
           },
           mine: {
             ...prev.mine,
@@ -151,12 +165,14 @@ export default function PostEngagementBar({ postId }: { postId: string }) {
         return
       }
 
-      // ✅ 서버 응답으로 확정
       setData((prev) => {
         if (!prev) return prev
         return {
           ...prev,
-          counts: { ...prev.counts, reactions: out?.reactions ?? prev.counts.reactions },
+          counts: {
+            ...prev.counts,
+            reactions: out?.reactions ?? prev.counts.reactions,
+          },
           mine: {
             ...prev.mine,
             like: out?.mine?.like ?? prev.mine.like,
@@ -177,12 +193,12 @@ export default function PostEngagementBar({ postId }: { postId: string }) {
   const upCnt = data?.counts.votes.up ?? 0
   const downCnt = data?.counts.votes.down ?? 0
   const cmCnt = data?.counts.comments ?? 0
+  const ctCnt = data?.counts.citations ?? 0
   const likeCnt = data?.counts.reactions.like ?? 0
   const bmCnt = data?.counts.reactions.bookmark ?? 0
 
   return (
     <section className="rounded-2xl border border-neutral-800 bg-neutral-950 p-6">
-      {/* 상단: Like(작지만 클릭범위는 크게) + 댓글 수, 우측 북마크 */}
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3">
           <button
@@ -200,8 +216,13 @@ export default function PostEngagementBar({ postId }: { postId: string }) {
             ❤️ <span className="ml-1">{likeCnt}</span>
           </button>
 
-          <div className="text-sm text-neutral-500">
-            comments <span className="text-neutral-200">{cmCnt}</span>
+          <div className="flex items-center gap-3 text-sm text-neutral-500">
+            <div>
+              comments <span className="text-neutral-200">{cmCnt}</span>
+            </div>
+            <div>
+              cited <span className="text-neutral-200">{ctCnt}</span>
+            </div>
           </div>
         </div>
 
@@ -221,7 +242,6 @@ export default function PostEngagementBar({ postId }: { postId: string }) {
         </button>
       </div>
 
-      {/* 큰 Vote 박스 */}
       <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
         <button
           type="button"
