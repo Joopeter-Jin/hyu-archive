@@ -8,6 +8,8 @@ import Comments from "@/components/comments/Comments"
 import RoleBadge from "@/components/profile/RoleBadge"
 import ViewIncrement from "@/components/views/ViewIncrement"
 import PostEngagementBar from "@/components/post/PostEngagementBar"
+import CitationPanel from "@/components/post/CitationPanel"
+import CiteThisArticle from "@/components/post/CiteThisArticle"
 
 export default async function PostPage({
   params,
@@ -36,6 +38,26 @@ export default async function PostPage({
           profile: { select: { displayName: true, role: true, contributorLevel: true } },
         },
       },
+      citationsFrom: {
+        select: {
+          toPost: {
+            select: {
+              id: true,
+              title: true,
+            },
+          },
+        },
+      },
+      citationsTo: {
+        select: {
+          fromPost: {
+            select: {
+              id: true,
+              title: true,
+            },
+          },
+        },
+      },
     },
   })
 
@@ -49,11 +71,21 @@ export default async function PostPage({
   const authorRole = post.author.profile?.role ?? "USER"
   const authorLevel = post.author.profile?.contributorLevel ?? 0
 
+  const cited = post.citationsFrom.map((x) => ({
+    id: x.toPost.id,
+    title: x.toPost.title,
+  }))
+
+  const citedBy = post.citationsTo.map((x) => ({
+    id: x.fromPost.id,
+    title: x.fromPost.title,
+  }))
+
   return (
     <div className="max-w-4xl mx-auto py-16 px-6 space-y-10">
       <ViewIncrement postId={post.id} />
 
-      <header className="space-y-2">
+      <header className="space-y-4">
         <div className="flex items-start justify-between gap-4">
           <div className="space-y-2">
             <h1 className="text-4xl font-serif font-bold">{post.title}</h1>
@@ -83,8 +115,23 @@ export default async function PostPage({
         dangerouslySetInnerHTML={{ __html: post.content }}
       />
 
-      {/* ✅✅ 글 하단 Engagement Bar */}
       <PostEngagementBar postId={post.id} />
+
+      <section className="space-y-4 border-t border-neutral-800 pt-6">
+        <div className="flex items-center justify-between">
+          <div className="text-sm text-neutral-500">
+            Internal references and archive citations
+          </div>
+          <CiteThisArticle
+            postId={post.id}
+            title={post.title}
+            authorName={authorName}
+            createdAt={post.createdAt.toISOString()}
+          />
+        </div>
+
+        <CitationPanel cited={cited} citedBy={citedBy} />
+      </section>
 
       <Comments postId={post.id} />
     </div>

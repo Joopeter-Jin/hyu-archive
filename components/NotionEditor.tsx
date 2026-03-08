@@ -1,3 +1,4 @@
+// components/NotionEditor.tsx
 "use client"
 
 import React, { useEffect, useMemo, useRef, useState } from "react"
@@ -18,6 +19,18 @@ interface Props {
   onChange?: (content: string) => void
 }
 
+type CitationSearchItem = {
+  id: string
+  title: string
+  category: string
+  createdAt: string
+  author: {
+    id: string
+    name: string | null
+    profile: { displayName: string | null } | null
+  }
+}
+
 /* ---------------------------
    Upload helper
 ---------------------------- */
@@ -33,15 +46,22 @@ async function uploadToServer(file: File): Promise<string> {
   return data.url
 }
 
+async function searchPostsForCitation(query: string): Promise<CitationSearchItem[]> {
+  const q = query.trim()
+  const url = `/api/posts/search?q=${encodeURIComponent(q)}&limit=8`
+  const res = await fetch(url, { cache: "no-store" })
+  if (!res.ok) throw new Error("Failed to search posts")
+  return (await res.json()) as CitationSearchItem[]
+}
+
 /* ---------------------------
-   Resizable Image Node (no caption / no alt)
+   Resizable Image Node
 ---------------------------- */
 
 const ResizableImage = Image.extend({
   addAttributes() {
     return {
       ...this.parent?.(),
-
       width: {
         default: null as number | null,
         parseHTML: (el) => {
@@ -50,9 +70,8 @@ const ResizableImage = Image.extend({
         },
         renderHTML: (attrs) => (attrs.width ? { "data-width": String(attrs.width) } : {}),
       },
-
       widthPct: {
-        default: null as number | null, // 25/50/100
+        default: null as number | null,
         parseHTML: (el) => {
           const w = el.getAttribute("data-width-pct")
           return w ? Number(w) : null
@@ -60,19 +79,16 @@ const ResizableImage = Image.extend({
         renderHTML: (attrs) =>
           attrs.widthPct ? { "data-width-pct": String(attrs.widthPct) } : {},
       },
-
       align: {
         default: "center" as "left" | "center" | "right",
         parseHTML: (el) => (el.getAttribute("data-align") as any) ?? "center",
         renderHTML: (attrs) => ({ "data-align": attrs.align }),
       },
-
       rounded: {
         default: true as boolean,
         parseHTML: (el) => el.getAttribute("data-rounded") !== "false",
         renderHTML: (attrs) => ({ "data-rounded": String(attrs.rounded) }),
       },
-
       bordered: {
         default: true as boolean,
         parseHTML: (el) => el.getAttribute("data-bordered") !== "false",
@@ -83,12 +99,10 @@ const ResizableImage = Image.extend({
 
   addNodeView() {
     return ({ node, editor, getPos }) => {
-      // figure wrapper
       const wrapper = document.createElement("figure")
       wrapper.className = "relative my-4 max-w-full"
       wrapper.style.display = "block"
 
-      // alignment via text-align on wrapper
       const applyAlign = (align: "left" | "center" | "right") => {
         wrapper.style.textAlign = align
       }
@@ -137,7 +151,6 @@ const ResizableImage = Image.extend({
           .run()
       }
 
-      // popover (minimal)
       const pop = document.createElement("div")
       pop.className =
         "hidden absolute left-2 top-2 z-20 rounded-xl border border-neutral-800 bg-neutral-950 shadow-lg p-2"
@@ -214,7 +227,6 @@ const ResizableImage = Image.extend({
       const onDocClick = () => hidePop()
       document.addEventListener("click", onDocClick)
 
-      // resize handle
       const handle = document.createElement("div")
       handle.className =
         "absolute right-2 bottom-2 w-3 h-3 rounded-sm bg-white/80 cursor-se-resize shadow"
@@ -252,7 +264,6 @@ const ResizableImage = Image.extend({
 
       handle.addEventListener("mousedown", onMouseDown)
 
-      // initial apply
       applyAlign(node.attrs.align ?? "center")
       applyWidth(node.attrs)
       applyDecor(node.attrs)
@@ -267,12 +278,10 @@ const ResizableImage = Image.extend({
         update: (updatedNode) => {
           if (updatedNode.type.name !== node.type.name) return false
           node = updatedNode
-
           img.src = updatedNode.attrs.src
           applyAlign(updatedNode.attrs.align ?? "center")
           applyWidth(updatedNode.attrs)
           applyDecor(updatedNode.attrs)
-
           return true
         },
         destroy: () => {
@@ -296,7 +305,11 @@ type SlashItem = {
   command: (opts: { editor: Editor; range: { from: number; to: number } }) => void
 }
 
-function getSlashItems(editor: Editor, openImagePicker: () => void): SlashItem[] {
+function getSlashItems(
+  editor: Editor,
+  openImagePicker: () => void,
+  openCitePicker: () => void
+): SlashItem[] {
   return [
     {
       title: "Heading 1",
@@ -348,10 +361,21 @@ function getSlashItems(editor: Editor, openImagePicker: () => void): SlashItem[]
         openImagePicker()
       },
     },
+    {
+      title: "Citation…",
+      keywords: ["cite", "reference", "paper", "article"],
+      command: ({ editor, range }) => {
+        editor.chain().focus().deleteRange(range).run()
+        openCitePicker()
+      },
+    },
   ]
 }
 
-function createSlashCommand(openImagePicker: () => void) {
+function createSlashCommand(
+  openImagePicker: () => void,
+  openCitePicker: () => void
+) {
   return Extension.create({
     name: "slash-command",
 
@@ -388,8 +412,7 @@ function createSlashCommand(openImagePicker: () => void) {
         currentItems.forEach((item, idx) => {
           const row = document.createElement("button")
           row.type = "button"
-          row.className =
-            "w-full text-left px-3 py-2 hover:bg-neutral-900 transition"
+          row.className = "w-full text-left px-3 py-2 hover:bg-neutral-900 transition"
           if (idx === activeIndex) row.classList.add("bg-neutral-900")
           row.textContent = item.title
           row.onclick = () => currentCommand?.(item)
@@ -405,7 +428,7 @@ function createSlashCommand(openImagePicker: () => void) {
           allowSpaces: false,
 
           items: ({ query }) => {
-            const all = getSlashItems(this.editor, openImagePicker)
+            const all = getSlashItems(this.editor, openImagePicker, openCitePicker)
             const q = query.toLowerCase().trim()
             if (!q) return all
 
@@ -464,7 +487,7 @@ function createSlashCommand(openImagePicker: () => void) {
 }
 
 /* ---------------------------
-   Floating toolbar (Bold/Italic/Link)
+   Floating toolbar
 ---------------------------- */
 
 function FloatingToolbar({
@@ -563,7 +586,7 @@ function FloatingToolbar({
 }
 
 /* ---------------------------
-   Block "+" button (left of current line)
+   Block "+" button
 ---------------------------- */
 
 function BlockPlusButton({
@@ -592,7 +615,6 @@ function BlockPlusButton({
       const box = containerRef.current.getBoundingClientRect()
       const coords = editor.view.coordsAtPos(sel.from)
 
-      // 왼쪽 gutter 영역(패딩 기준)
       const x = 10
       const y = coords.top - box.top + 6
 
@@ -627,15 +649,138 @@ function BlockPlusButton({
 }
 
 /* ---------------------------
-   Final NotionEditor (no caption)
+   Citation picker
+---------------------------- */
+
+function CitationPickerModal({
+  open,
+  onClose,
+  onSelect,
+}: {
+  open: boolean
+  onClose: () => void
+  onSelect: (item: CitationSearchItem) => void
+}) {
+  const [q, setQ] = useState("")
+  const [loading, setLoading] = useState(false)
+  const [items, setItems] = useState<CitationSearchItem[]>([])
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!open) return
+    let ignore = false
+
+    const run = async () => {
+      try {
+        setLoading(true)
+        setError(null)
+        const out = await searchPostsForCitation(q)
+        if (!ignore) setItems(out)
+      } catch (e: any) {
+        if (!ignore) setError(e?.message ?? "Failed to search")
+      } finally {
+        if (!ignore) setLoading(false)
+      }
+    }
+
+    const t = setTimeout(run, 180)
+    return () => {
+      ignore = true
+      clearTimeout(t)
+    }
+  }, [open, q])
+
+  useEffect(() => {
+    if (!open) {
+      setQ("")
+      setItems([])
+      setError(null)
+      setLoading(false)
+    }
+  }, [open])
+
+  if (!open) return null
+
+  return (
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 p-4">
+      <div className="w-full max-w-2xl rounded-2xl border border-neutral-800 bg-neutral-950 shadow-2xl">
+        <div className="flex items-center justify-between border-b border-neutral-900 px-5 py-4">
+          <div>
+            <div className="text-base font-semibold text-white">Cite post</div>
+            <div className="mt-1 text-xs text-neutral-500">Search a post and insert it as a citation</div>
+          </div>
+          <button
+            type="button"
+            className="rounded-lg border border-neutral-800 px-3 py-1.5 text-sm hover:bg-neutral-900"
+            onClick={onClose}
+          >
+            Close
+          </button>
+        </div>
+
+        <div className="p-5 space-y-4">
+          <input
+            autoFocus
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Search post titles..."
+            className="w-full rounded-xl border border-neutral-800 bg-black px-4 py-3 text-sm outline-none focus:border-neutral-600"
+          />
+
+          {loading && <div className="text-sm text-neutral-500">Searching...</div>}
+          {error && <div className="text-sm text-red-400">{error}</div>}
+
+          <div className="max-h-[360px] space-y-2 overflow-y-auto">
+            {!loading && items.length === 0 ? (
+              <div className="rounded-xl border border-neutral-900 bg-black/20 p-4 text-sm text-neutral-500">
+                No posts found.
+              </div>
+            ) : (
+              items.map((item) => {
+                const displayName =
+                  item.author.profile?.displayName?.trim() ||
+                  item.author.name?.trim() ||
+                  "Unknown"
+
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => onSelect(item)}
+                    className="block w-full rounded-xl border border-neutral-900 bg-black/20 p-4 text-left transition hover:bg-neutral-900"
+                  >
+                    <div className="font-medium text-white">{item.title}</div>
+                    <div className="mt-1 text-xs text-neutral-500">
+                      {new Date(item.createdAt).toLocaleDateString()} · {item.category} · {displayName}
+                    </div>
+                  </button>
+                )
+              })
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* ---------------------------
+   Final NotionEditor
 ---------------------------- */
 
 export default function NotionEditor({ content, onChange }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 
+  const [citeOpen, setCiteOpen] = useState(false)
+
   const openImagePicker = () => fileInputRef.current?.click()
-  const SlashCommand = useMemo(() => createSlashCommand(openImagePicker), [])
+  const openCitePicker = () => setCiteOpen(true)
+
+  const SlashCommand = useMemo(
+    () => createSlashCommand(openImagePicker, openCitePicker),
+    []
+  )
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -645,7 +790,6 @@ export default function NotionEditor({ content, onChange }: Props) {
       Underline,
       Dropcursor,
 
-      // ✅ Notion-style drag handle for blocks
       DragHandle.configure({
         render() {
           const el = document.createElement("div")
@@ -676,12 +820,10 @@ export default function NotionEditor({ content, onChange }: Props) {
 
     editorProps: {
       attributes: {
-        // 왼쪽 여백을 만들어야 (+, ⋮⋮)가 노션처럼 보임
         class:
           "prose prose-invert max-w-none focus:outline-none min-h-[520px] px-12 py-6",
       },
 
-      // ✅ drag&drop image
       handleDrop: (_view, event) => {
         const files = event.dataTransfer?.files
         if (!files?.length) return false
@@ -701,7 +843,6 @@ export default function NotionEditor({ content, onChange }: Props) {
         return true
       },
 
-      // ✅ paste image
       handlePaste: (_view, event) => {
         const items = event.clipboardData?.items
         if (!items) return false
@@ -730,7 +871,39 @@ export default function NotionEditor({ content, onChange }: Props) {
     },
   })
 
-  // ✅ edit 시 content 변경을 editor에 반영
+  const insertCitation = (item: CitationSearchItem) => {
+    if (!editor) return
+
+    const href = `/post/${item.id}`
+    const title = escapeHtml(item.title)
+
+    const { from, to, empty } = editor.state.selection
+
+    if (!empty) {
+      editor
+        .chain()
+        .focus()
+        .extendMarkRange("link")
+        .setLink({
+          href,
+          "data-citation": "true",
+        } as any)
+        .run()
+      setCiteOpen(false)
+      return
+    }
+
+    const html = `<p><a href="${href}" data-citation="true">${title}</a></p>`
+
+    editor
+      .chain()
+      .focus()
+      .insertContent(html)
+      .run()
+
+    setCiteOpen(false)
+  }
+
   const lastContentRef = useRef<string | undefined>(undefined)
   useEffect(() => {
     if (!editor) return
@@ -739,16 +912,10 @@ export default function NotionEditor({ content, onChange }: Props) {
 
     const current = editor.getHTML()
     if (current !== content) {
-      // TipTap v3: emitUpdate 옵션
       editor.commands.setContent(content, { emitUpdate: false })
     }
     lastContentRef.current = content
   }, [editor, content])
-
-  if (!editor || !containerRef.current) {
-    // editor 초기화 전에는 컨테이너가 없어서 툴바 위치 계산이 불가능할 수 있음
-    // (초기 렌더 안전)
-  }
 
   const onPickImage = async (f: File | null) => {
     if (!f) return
@@ -768,13 +935,21 @@ export default function NotionEditor({ content, onChange }: Props) {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 flex-wrap">
         <button
           type="button"
           className="px-3 py-1 text-sm border border-neutral-800 rounded hover:bg-neutral-900"
           onClick={openImagePicker}
         >
           Insert image
+        </button>
+
+        <button
+          type="button"
+          className="px-3 py-1 text-sm border border-neutral-800 rounded hover:bg-neutral-900"
+          onClick={openCitePicker}
+        >
+          Cite post
         </button>
 
         <input
@@ -807,13 +982,16 @@ export default function NotionEditor({ content, onChange }: Props) {
       </div>
 
       <div className="text-xs text-neutral-500">
-        Tip: 이미지 클릭 → 프리셋/정렬/삭제. 오른쪽 아래 핸들 드래그 → 자유 리사이즈.
+        Tip: use “Cite post” or “/citation” to insert internal references. 이미지 클릭 → 프리셋/정렬/삭제. 오른쪽 아래 핸들 드래그 → 자유 리사이즈.
       </div>
 
-      {/* drag-handle 스타일(필수) */}
+      <CitationPickerModal
+        open={citeOpen}
+        onClose={() => setCiteOpen(false)}
+        onSelect={insertCitation}
+      />
+
       <style jsx global>{`
-        /* TipTap DragHandle extension renders elements with this class.
-           We give it a position in the left gutter like Notion. */
         .tt-drag-handle {
           position: absolute;
           left: 12px;
@@ -833,4 +1011,12 @@ export default function NotionEditor({ content, onChange }: Props) {
       `}</style>
     </div>
   )
+}
+
+function escapeHtml(s: string) {
+  return s
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
 }
