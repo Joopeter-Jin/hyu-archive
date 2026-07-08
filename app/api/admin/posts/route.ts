@@ -30,6 +30,7 @@ export async function GET(req: Request) {
       id: true,
       title: true,
       category: true,
+      status: true,
       createdAt: true,
       updatedAt: true,
       views: true,

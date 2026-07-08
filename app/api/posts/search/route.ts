@@ -13,11 +13,10 @@ export async function GET(req: Request) {
   const limit = Math.min(asInt(searchParams.get("limit"), 8), 20)
 
   const posts = await prisma.post.findMany({
-    where: q
-      ? {
-          title: { contains: q, mode: "insensitive" },
-        }
-      : undefined,
+    where: {
+      status: "PUBLISHED",
+      ...(q ? { title: { contains: q, mode: "insensitive" } } : {}),
+    },
     orderBy: { createdAt: "desc" },
     take: limit,
     select: {

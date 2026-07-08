@@ -32,7 +32,7 @@ export async function GET(req: Request) {
   const category = searchParams.get("category") || undefined
 
   const posts = await prisma.post.findMany({
-    where: category ? { category } : undefined,
+    where: { status: "PUBLISHED", ...(category ? { category } : {}) },
     orderBy: { createdAt: "desc" },
     select: {
       id: true,

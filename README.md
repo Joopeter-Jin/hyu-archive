@@ -22,6 +22,8 @@
 
 역할(ADMIN/PROFESSOR/GRAD/CONTRIBUTOR/USER)과 90일 기여 점수(`CS = 0.35·AS + 0.40·IS + 0.25·SS`) 기반 Contributor 레벨 제도로 운영됩니다.
 
+운영 원칙에 부합하지 않는 게시물(투자 권유 등)은 회원 신고와 운영진 검토를 거쳐 비공개(UNLISTED)·삭제(REMOVED) 처리될 수 있습니다. 모든 조치는 데이터를 보존한 채 이루어지며 ActivityLog에 기록됩니다.
+
 ## 기술 스택
 
 Next.js(App Router) · NextAuth(Google OAuth) · Prisma · PostgreSQL(Supabase) · Supabase Storage · Resend · Vercel(+Cron) · Tailwind CSS v3 · TipTap 에디터

@@ -19,6 +19,7 @@ function makeExcerptFromHtml(html: string, max = 180) {
 
 export default async function HomePage() {
   const latest = await prisma.post.findMany({
+    where: { status: "PUBLISHED" },
     take: 6,
     orderBy: { createdAt: "desc" },
     select: {

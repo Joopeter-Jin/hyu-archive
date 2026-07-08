@@ -6,10 +6,13 @@ import Link from "next/link"
 
 type Role = "ADMIN" | "PROFESSOR" | "GRAD" | "CONTRIBUTOR" | "USER"
 
+type PostStatus = "PUBLISHED" | "UNLISTED" | "REMOVED"
+
 type Row = {
   id: string
   title: string
   category: string
+  status: PostStatus
   createdAt: string
   updatedAt: string
   views: number
@@ -43,6 +46,24 @@ export default function AdminPostsClient() {
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  const setStatus = async (postId: string, status: PostStatus) => {
+    setBusyId(postId)
+    setErr(null)
+    try {
+      const res = await fetch(`/api/admin/posts/${postId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      })
+      if (!res.ok) throw new Error(await res.text().catch(() => "Failed"))
+      await load()
+    } catch (e: any) {
+      setErr(e?.message ?? "Failed")
+    } finally {
+      setBusyId(null)
+    }
+  }
 
   const togglePick = async (postId: string, nextActive: boolean) => {
     setBusyId(postId)
@@ -107,6 +128,18 @@ export default function AdminPostsClient() {
                           Picked
                         </span>
                       )}
+                      {p.status !== "PUBLISHED" && (
+                        <span
+                          className={
+                            "text-[11px] px-2 py-0.5 rounded-full border " +
+                            (p.status === "UNLISTED"
+                              ? "border-amber-700/50 text-amber-200"
+                              : "border-red-900/50 text-red-300")
+                          }
+                        >
+                          {p.status}
+                        </span>
+                      )}
                     </div>
                     <div className="text-xs text-neutral-500">
                       {p.category} · {new Date(p.createdAt).toLocaleString()} · views {p.views} · by {authorName}
@@ -114,6 +147,36 @@ export default function AdminPostsClient() {
                     <div className="text-[11px] text-neutral-600">id: {p.id}</div>
                   </div>
 
+                  <div className="flex flex-col gap-1 shrink-0">
+                  {p.status === "PUBLISHED" ? (
+                    <button
+                      disabled={busyId === p.id}
+                      onClick={() => setStatus(p.id, "UNLISTED")}
+                      className="px-3 py-2 text-sm rounded-lg border border-amber-800/50 text-amber-200 hover:bg-amber-950/30 transition disabled:opacity-50"
+                      type="button"
+                    >
+                      Unlist
+                    </button>
+                  ) : (
+                    <button
+                      disabled={busyId === p.id}
+                      onClick={() => setStatus(p.id, "PUBLISHED")}
+                      className="px-3 py-2 text-sm rounded-lg border border-emerald-800/50 text-emerald-200 hover:bg-emerald-950/30 transition disabled:opacity-50"
+                      type="button"
+                    >
+                      Restore
+                    </button>
+                  )}
+                  {p.status !== "REMOVED" && (
+                    <button
+                      disabled={busyId === p.id}
+                      onClick={() => setStatus(p.id, "REMOVED")}
+                      className="px-3 py-2 text-sm rounded-lg border border-red-900/50 text-red-300 hover:bg-red-950/30 transition disabled:opacity-50"
+                      type="button"
+                    >
+                      Remove
+                    </button>
+                  )}
                   <button
                     disabled={busyId === p.id}
                     onClick={() => togglePick(p.id, !picked)}
@@ -127,6 +190,7 @@ export default function AdminPostsClient() {
                   >
                     {busyId === p.id ? "Saving..." : picked ? "Unpick" : "Pick"}
                   </button>
+                  </div>
                 </div>
               </div>
             )

@@ -17,6 +17,7 @@ export async function GET(_req: Request, ctx: Ctx) {
       title: true,
       content: true,
       category: true,
+      status: true,
       createdAt: true,
       authorId: true,
       views: true,
@@ -35,6 +36,14 @@ export async function GET(_req: Request, ctx: Ctx) {
   })
 
   if (!post) return NextResponse.json({ error: "Not found" }, { status: 404 })
+
+  // ✅ 비공개/삭제 처리 글은 작성자·운영진만 조회 가능
+  if (post.status !== "PUBLISHED") {
+    const me = await getMeWithRole()
+    const allowed = !!me && (me.id === post.authorId || me.role === "ADMIN")
+    if (!allowed) return NextResponse.json({ error: "Not found" }, { status: 404 })
+  }
+
   return NextResponse.json(post, { status: 200 })
 }
 

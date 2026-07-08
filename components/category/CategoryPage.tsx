@@ -50,6 +50,8 @@ export default async function CategoryPage({
 
   const where = {
     category,
+    status: "PUBLISHED" as const, // ✅ 비공개/삭제 처리 글 제외
+
     ...(q
       ? scope === "title"
         ? { title: { contains: q, mode: "insensitive" as const } }

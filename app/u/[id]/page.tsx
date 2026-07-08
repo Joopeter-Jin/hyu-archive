@@ -33,7 +33,7 @@ export default async function UserPage({
 
   const posts = tab === "posts"
     ? await prisma.post.findMany({
-        where: { authorId: id },
+        where: { authorId: id, status: "PUBLISHED" },
         orderBy: { createdAt: "desc" },
         take: 30,
         select: { id: true, title: true, createdAt: true, category: true, views: true },

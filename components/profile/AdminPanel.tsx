@@ -9,6 +9,7 @@ import AdminCommentsClient from "@/components/admin/AdminCommentsClient"
 import AdminVotesClient from "@/components/admin/AdminVotesClient"
 import AdminArchivePicksClient from "@/components/admin/AdminArchivePicksClient"
 import AdminScoresClient from "@/components/admin/AdminScoresClient"
+import AdminReportsClient from "@/components/admin/AdminReportsClient"
 
 type Tab =
   | "roleRequests"
@@ -18,6 +19,7 @@ type Tab =
   | "votes"
   | "archivePicks"
   | "scores"
+  | "reports"
 
 export default function AdminPanel() {
   const [tab, setTab] = useState<Tab>("roleRequests")
@@ -54,6 +56,7 @@ export default function AdminPanel() {
         <TabBtn k="votes" label="Votes" />
         <TabBtn k="archivePicks" label="Archive Picks" />
         <TabBtn k="scores" label="Scores" />
+        <TabBtn k="reports" label="Reports" />
       </div>
 
       <div className="pt-2">
@@ -64,6 +67,7 @@ export default function AdminPanel() {
         {tab === "votes" && <AdminVotesClient />}
         {tab === "archivePicks" && <AdminArchivePicksClient />}
         {tab === "scores" && <AdminScoresClient />}
+        {tab === "reports" && <AdminReportsClient />}
       </div>
     </div>
   )

@@ -56,6 +56,26 @@ enum EndorsementSentiment {
   NEGATIVE
 }
 
+enum PostStatus {
+  PUBLISHED // 공개
+  UNLISTED  // 비공개 처리 (운영 원칙 4절 — 목록/피드에서 제외, 작성자·운영진만 열람)
+  REMOVED   // 운영진 삭제 처리 (데이터는 보존, 화면에서는 삭제로 취급)
+}
+
+enum ReportReason {
+  INVESTMENT_CONTENT // 투자 권유/시세 예측 등 운영 원칙 위반
+  SPAM
+  ABUSE
+  COPYRIGHT
+  OTHER
+}
+
+enum ReportStatus {
+  OPEN
+  RESOLVED
+  DISMISSED
+}
+
 enum LogAction {
   POST_CREATE
   POST_UPDATE
@@ -86,6 +106,10 @@ enum LogAction {
 
   DM_THREAD_CREATE
   DM_MESSAGE_SEND
+
+  POST_STATUS_CHANGE
+  REPORT_CREATE
+  REPORT_RESOLVE
 }
 
 //////////////////////////////////////////////////
@@ -127,6 +151,8 @@ model User {
   logsAsActor       ActivityLog[]    @relation("LogsActor")
   logsAsTarget      ActivityLog[]    @relation("LogsTargetUser")
   postPins          PostPin[]        @relation("PinsByUser")
+  reportsFiled      Report[]         @relation("ReportsFiled")
+  reportsResolved   Report[]         @relation("ReportsResolved")
 
   scoreSnapshots ScoreSnapshot[]
 }
@@ -210,6 +236,9 @@ model Post {
 
   views Int @default(0)
 
+  // ✅ 모더레이션 상태 (운영 원칙 4절: 비공개/삭제 조치)
+  status PostStatus @default(PUBLISHED)
+
   comments Comment[]
   votes    Vote[]    @relation("PostVotes")
 
@@ -225,6 +254,9 @@ model Post {
 
   logs ActivityLog[] @relation("LogPost")
 
+  reports Report[]
+
+  @@index([category, status, createdAt])
   @@map("posts")
 }
 
@@ -628,6 +660,31 @@ model PostPin {
 //////////////////////////////////////////////////
 // ActivityLog
 //////////////////////////////////////////////////
+
+model Report {
+  id     String @id @default(uuid()) @db.Uuid
+  postId String @map("post_id") @db.Uuid
+  post   Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  reporterId String @map("reporter_id")
+  reporter   User   @relation("ReportsFiled", fields: [reporterId], references: [id], onDelete: Cascade)
+
+  reason ReportReason
+  detail String?
+
+  status ReportStatus @default(OPEN)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  resolvedAt     DateTime? @map("resolved_at")
+  resolvedById   String?   @map("resolved_by_id")
+  resolvedBy     User?     @relation("ReportsResolved", fields: [resolvedById], references: [id], onDelete: SetNull)
+  resolutionNote String?   @map("resolution_note")
+
+  @@unique([postId, reporterId]) // 같은 글 중복 신고 방지
+  @@index([status, createdAt])
+  @@map("reports")
+}
 
 model ActivityLog {
   id String @id @default(uuid()) @db.Uuid

@@ -10,6 +10,7 @@ import ViewIncrement from "@/components/views/ViewIncrement"
 import PostEngagementBar from "@/components/post/PostEngagementBar"
 import CitationPanel from "@/components/post/CitationPanel"
 import CiteThisArticle from "@/components/post/CiteThisArticle"
+import ReportButton from "@/components/post/ReportButton"
 
 export default async function PostPage({
   params,
@@ -28,6 +29,7 @@ export default async function PostPage({
       title: true,
       content: true,
       category: true,
+      status: true,
       createdAt: true,
       authorId: true,
       views: true,
@@ -64,6 +66,19 @@ export default async function PostPage({
   if (!post) return notFound()
 
   const isOwner = !!userId && userId === post.authorId
+
+  // ✅ 모더레이션 가드: 비공개/삭제 처리 글은 작성자와 운영진만 열람
+  let viewerIsAdmin = false
+  if (post.status !== "PUBLISHED") {
+    if (userId) {
+      const viewer = await prisma.userProfile.findUnique({
+        where: { userId },
+        select: { role: true },
+      })
+      viewerIsAdmin = viewer?.role === "ADMIN"
+    }
+    if (!isOwner && !viewerIsAdmin) return notFound()
+  }
   const authorName =
     post.author.profile?.displayName?.trim() ||
     post.author.name?.trim() ||
@@ -84,6 +99,14 @@ export default async function PostPage({
   return (
     <div className="max-w-4xl mx-auto py-16 px-6 space-y-10">
       <ViewIncrement postId={post.id} />
+
+      {post.status !== "PUBLISHED" && (
+        <div className="rounded-lg border border-amber-800/50 bg-amber-950/30 px-4 py-3 text-sm text-amber-200">
+          {post.status === "UNLISTED"
+            ? "이 글은 운영 원칙에 따라 비공개 처리되어 목록에 노출되지 않습니다. (작성자·운영진만 열람 가능)"
+            : "이 글은 운영진에 의해 삭제 처리되었습니다. (작성자·운영진만 열람 가능)"}
+        </div>
+      )}
 
       <header className="space-y-4">
         <div className="flex items-start justify-between gap-4">
@@ -115,7 +138,10 @@ export default async function PostPage({
         dangerouslySetInnerHTML={{ __html: post.content }}
       />
 
-      <PostEngagementBar postId={post.id} />
+      <div className="flex items-center justify-between gap-4">
+        <PostEngagementBar postId={post.id} />
+        {!isOwner && <ReportButton postId={post.id} />}
+      </div>
 
       <section className="space-y-4 border-t border-neutral-800 pt-6">
         <div className="flex items-center justify-between">

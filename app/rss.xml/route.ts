@@ -40,7 +40,7 @@ export async function GET(req: Request) {
     : `${baseUrl}/rss.xml`
 
   const posts = await prisma.post.findMany({
-    where: category ? { category } : undefined,
+    where: { status: "PUBLISHED", ...(category ? { category } : {}) },
     orderBy: { createdAt: "desc" },
     take: 30,
     select: {
