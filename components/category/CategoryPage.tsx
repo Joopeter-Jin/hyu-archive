@@ -1,10 +1,10 @@
 // components/category/CategoryPage.tsx
 import Link from "next/link"
+import { unstable_cache } from "next/cache"
 import { prisma } from "@/lib/prisma"
 import WriteButton from "@/components/WriteButton"
 import ListControls from "@/components/category/ListControls"
 import Pagination from "@/components/category/Pagination"
-import RefreshOnFocus from "@/components/category/RefreshOnFocus"
 import SubscribeToggle from "@/components/category/SubscribeToggle"
 
 type SearchParams = Record<string, string | string[] | undefined>
@@ -67,36 +67,42 @@ export default async function CategoryPage({
       ? ({ createdAt: "asc" } as const)
       : ({ createdAt: "desc" } as const)
 
-  const [total, posts] = await Promise.all([
-    prisma.post.count({ where }),
-    prisma.post.findMany({
-      where,
-      select: {
-        id: true,
-        title: true,
-        createdAt: true,
-        views: true,
-        author: {
+  // ✅ 목록 쿼리를 60초 캐시 (글 작성/수정/삭제 시 `posts:{category}` 태그로 즉시 무효화)
+  const getPostList = unstable_cache(
+    async () =>
+      Promise.all([
+        prisma.post.count({ where }),
+        prisma.post.findMany({
+          where,
           select: {
             id: true,
-            name: true,
-            profile: { select: { displayName: true } },
+            title: true,
+            createdAt: true,
+            views: true,
+            author: {
+              select: {
+                id: true,
+                name: true,
+                profile: { select: { displayName: true } },
+              },
+            },
           },
-        },
-      },
-      orderBy: sort === "top" ? ({ createdAt: "desc" } as const) : orderBy,
-      skip,
-      take,
-    }),
-  ])
+          orderBy: sort === "top" ? ({ createdAt: "desc" } as const) : orderBy,
+          skip,
+          take,
+        }),
+      ]),
+    ["post-list", category, q, sort, scope, String(page), String(perPage)],
+    { revalidate: 60, tags: ["posts", `posts:${category}`] }
+  )
+
+  const [total, posts] = await getPostList()
 
   const totalPages = Math.max(1, Math.ceil(total / perPage))
   const safePage = Math.min(page, totalPages)
 
   return (
     <div className="py-12 px-6 space-y-10">
-      <RefreshOnFocus />
-
       <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-6">
         <div>
           <h1 className="text-3xl font-serif font-bold">{title}</h1>

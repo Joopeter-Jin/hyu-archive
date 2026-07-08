@@ -5,7 +5,8 @@ import CoreQuestions from "@/components/home/CoreQuestions"
 import ArchiveStructure from "@/components/home/ArchiveStructure"
 import LatestPublications from "@/components/home/LatestPublications"
 
-export const dynamic = "force-dynamic"
+// ✅ ISR: 60초마다 재생성 + 글 작성/수정/삭제 시 revalidatePath("/")로 즉시 갱신
+export const revalidate = 60
 
 function makeExcerptFromHtml(html: string, max = 180) {
   const cleaned = html

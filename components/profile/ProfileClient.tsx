@@ -2,6 +2,7 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState } from "react"
+import Image from "next/image"
 import Link from "next/link"
 import { signIn, useSession } from "next-auth/react"
 import RoleBadge from "@/components/profile/RoleBadge"
@@ -417,8 +418,13 @@ export default function ProfileClient() {
       <div className="flex items-start justify-between gap-6">
         <div className="flex items-center gap-4">
           {meData.image ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={meData.image} alt="avatar" className="w-12 h-12 rounded-full border border-neutral-800" />
+            <Image
+              src={meData.image}
+              alt="avatar"
+              width={48}
+              height={48}
+              className="w-12 h-12 rounded-full border border-neutral-800"
+            />
           ) : (
             <div className="w-12 h-12 rounded-full border border-neutral-800 bg-neutral-900" />
           )}

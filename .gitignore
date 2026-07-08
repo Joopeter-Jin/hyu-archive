@@ -41,3 +41,7 @@ yarn-error.log*
 next-env.d.ts
 
 /lib/generated/prisma
+
+# prisma local sqlite (잔재 방지)
+prisma/dev.db
+prisma/*.db

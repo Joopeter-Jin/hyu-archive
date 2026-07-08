@@ -3,7 +3,17 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import NotionEditor from "@/components/NotionEditor"
+import dynamicImport from "next/dynamic"
+
+// ✅ TipTap 에디터(약 1,000줄)는 쓰기 화면에서만 지연 로드 (초기 번들 절감)
+const NotionEditor = dynamicImport(() => import("@/components/NotionEditor"), {
+  ssr: false,
+  loading: () => (
+    <div className="min-h-[300px] rounded-md border border-neutral-800 p-4 text-neutral-500">
+      Loading editor...
+    </div>
+  ),
+})
 
 type Props = {
   category: string

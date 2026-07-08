@@ -2,8 +2,8 @@
 import { prisma } from "@/lib/prisma"
 
 export const runtime = "nodejs"
-export const dynamic = "force-dynamic"
-export const revalidate = 0
+// ✅ RSS는 5분 캐시로 충분
+export const revalidate = 300
 
 function escapeXml(s: string) {
   return s

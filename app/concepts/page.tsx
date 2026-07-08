@@ -1,7 +1,4 @@
 // app/concepts/page.tsx
-export const dynamic = "force-dynamic"
-export const revalidate = 0
-
 import CategoryPage from "@/components/category/CategoryPage"
 
 type SearchParams = Record<string, string | string[] | undefined>

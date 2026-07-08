@@ -1,5 +1,6 @@
 // app/api/posts/[id]/route.ts
 import { NextResponse } from "next/server"
+import { revalidatePath, revalidateTag } from "next/cache"
 import { prisma } from "@/lib/prisma"
 import { getMeWithRole, canManageCategory } from "@/lib/acl"
 import { syncCitationsTx } from "@/lib/citationSync"
@@ -96,6 +97,13 @@ export async function PUT(req: Request, ctx: Ctx) {
     return { id: post.id, category: post.category }
   })
 
+  // ✅ 캐시 무효화 (카테고리 이동 시 기존/새 카테고리 모두)
+  revalidateTag(`posts:${existing.category}`, "max")
+  if (updated.category !== existing.category) {
+    revalidateTag(`posts:${updated.category}`, "max")
+  }
+  revalidatePath("/")
+
   return NextResponse.json(updated, { status: 200 })
 }
 
@@ -118,7 +126,7 @@ export async function DELETE(_req: Request, ctx: Ctx) {
   await prisma.$transaction(async (tx) => {
     // 삭제 로그를 먼저 남김 (post delete 후에는 postId FK 처리에 따라 관계가 끊길 수 있음)
     await tx.activityLog.create({
-      data: {
+        data: {
         actorId: me.id,
         action: "POST_DELETE",
         postId: existing.id,
@@ -128,6 +136,9 @@ export async function DELETE(_req: Request, ctx: Ctx) {
 
     await tx.post.delete({ where: { id: existing.id } })
   })
+
+  revalidateTag(`posts:${existing.category}`, "max")
+  revalidatePath("/")
 
   return NextResponse.json({ ok: true, category: existing.category }, { status: 200 })
 }

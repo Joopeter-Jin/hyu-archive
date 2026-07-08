@@ -1,11 +1,11 @@
 {
   "crons": [
     {
-      "path": "/api/cron/notifications?key=YOUR_SECRET",
+      "path": "/api/cron/notifications",
       "schedule": "0 0 * * *"
     },
     {
-      "path": "/api/cron/scores?key=YOUR_CRON_SECRET",
+      "path": "/api/cron/scores",
       "schedule": "10 9 * * *"
     }
   ]

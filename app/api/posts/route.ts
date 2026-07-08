@@ -1,5 +1,6 @@
 // app/api/posts/route.ts
 import { NextResponse } from "next/server"
+import { revalidatePath, revalidateTag } from "next/cache"
 import { prisma } from "@/lib/prisma"
 import { getMeWithRole, canManageCategory } from "@/lib/acl"
 import { syncCitationsTx } from "@/lib/citationSync"
@@ -129,6 +130,10 @@ export async function POST(req: Request) {
 
       return { id: post.id, category: post.category }
     })
+
+    // ✅ 캐시 무효화: 해당 카테고리 목록 + 홈(최신 글)
+    revalidateTag(`posts:${created.category}`, "max")
+    revalidatePath("/")
 
     return NextResponse.json(created, { status: 201 })
   } catch (e: any) {
